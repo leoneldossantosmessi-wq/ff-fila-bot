@@ -988,4 +988,15 @@ client.once(
 );
 
 
-client.login(config.token);
+clienconst http = require("http");
+
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end("Bot online!");
+}).listen(PORT, "0.0.0.0", () => {
+    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
+});
+
+client.login(TOKEN);
