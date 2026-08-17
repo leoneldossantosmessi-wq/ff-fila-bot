@@ -1,5 +1,16 @@
 {
   "token": "",
-  "clientId": "1538631157690056804",
-  "guildId": "1538169849002594354"
+  "clientId": "1538621157690056804",
+  "guildId": "1538169849002594354",
+  "roles": {
+    "staff": ""
+  },
+  "channels": {
+    "logs": "",
+    "results": ""
+  },
+  "queue": {
+    "maxPlayers": 8,
+    "playersPerTeam": 4
+  }
 }
