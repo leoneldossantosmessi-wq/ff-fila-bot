@@ -27,7 +27,6 @@ const client = new Client({
     ]
 });
 
-
 // ======================================================
 // BANCO DE DADOS
 // ======================================================
@@ -62,7 +61,6 @@ function saveDatabase() {
     );
 }
 
-
 // ======================================================
 // FUNÇÕES AUXILIARES
 // ======================================================
@@ -78,11 +76,8 @@ function isStaff(member) {
     );
 }
 
-
 function getPlayer(userId) {
-
     if (!db.players[userId]) {
-
         db.players[userId] = {
             id: userId,
             wins: 0,
@@ -97,9 +92,7 @@ function getPlayer(userId) {
     return db.players[userId];
 }
 
-
 function createPlayerList(ids) {
-
     if (ids.length === 0) {
         return "Nenhum jogador.";
     }
@@ -109,12 +102,10 @@ function createPlayerList(ids) {
         .join("\n");
 }
 
-
 function createQueueEmbed() {
-
     const queue = db.queue;
 
-    const embed = new EmbedBuilder()
+    return new EmbedBuilder()
         .setTitle("🎮 FILA DE APOSTADOS")
         .setDescription(
             "Entre na fila para participar da próxima partida."
@@ -134,13 +125,9 @@ function createQueueEmbed() {
         .setFooter({
             text: "ORG Free Fire • Sistema de Filas"
         });
-
-    return embed;
 }
 
-
 function createQueueButtons() {
-
     return new ActionRowBuilder().addComponents(
 
         new ButtonBuilder()
@@ -163,13 +150,11 @@ function createQueueButtons() {
     );
 }
 
-
 // ======================================================
 // ATUALIZAR PAINEL
 // ======================================================
 
 async function updateQueuePanel(channel) {
-
     const messages = await channel.messages.fetch({
         limit: 20
     });
@@ -187,7 +172,6 @@ async function updateQueuePanel(channel) {
         components: [createQueueButtons()]
     });
 }
-
 
 // ======================================================
 // CRIAR PARTIDA
@@ -237,14 +221,11 @@ async function createMatch(guild, channel) {
     db.matches.push(match);
 
     players.forEach(id => {
-
         const player = getPlayer(id);
-
         player.matches++;
     });
 
     saveDatabase();
-
 
     const embed = new EmbedBuilder()
         .setTitle(`🔥 PARTIDA #${matchId}`)
@@ -269,7 +250,6 @@ async function createMatch(guild, channel) {
             text: "Boa partida!"
         });
 
-
     await channel.send({
         content: players
             .map(id => `<@${id}>`)
@@ -277,14 +257,12 @@ async function createMatch(guild, channel) {
         embeds: [embed]
     });
 
-
     const logsChannel =
         guild.channels.cache.get(
             config.channels.logs
         );
 
     if (logsChannel) {
-
         await logsChannel.send({
             embeds: [
                 new EmbedBuilder()
@@ -309,7 +287,6 @@ async function createMatch(guild, channel) {
     await updateQueuePanel(channel);
 }
 
-
 // ======================================================
 // COMANDOS
 // ======================================================
@@ -318,47 +295,35 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("painel")
-        .setDescription(
-            "Cria o painel da fila"
-        )
+        .setDescription("Cria o painel da fila")
         .setDefaultMemberPermissions(
             PermissionsBitField.Flags.Administrator.toString()
         ),
 
     new SlashCommandBuilder()
         .setName("fila")
-        .setDescription(
-            "Mostra a fila atual"
-        ),
+        .setDescription("Mostra a fila atual"),
 
     new SlashCommandBuilder()
         .setName("limparfila")
-        .setDescription(
-            "Limpa a fila"
-        )
+        .setDescription("Limpa a fila")
         .setDefaultMemberPermissions(
             PermissionsBitField.Flags.Administrator.toString()
         ),
 
     new SlashCommandBuilder()
         .setName("resultado")
-        .setDescription(
-            "Registra o resultado de uma partida"
-        )
+        .setDescription("Registra o resultado de uma partida")
         .addIntegerOption(option =>
             option
                 .setName("partida")
-                .setDescription(
-                    "Número da partida"
-                )
+                .setDescription("Número da partida")
                 .setRequired(true)
         )
         .addStringOption(option =>
             option
                 .setName("vencedor")
-                .setDescription(
-                    "Time vencedor"
-                )
+                .setDescription("Time vencedor")
                 .setRequired(true)
                 .addChoices(
                     {
@@ -374,25 +339,18 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription(
-            "Mostra o ranking dos jogadores"
-        ),
+        .setDescription("Mostra o ranking dos jogadores"),
 
     new SlashCommandBuilder()
         .setName("perfil")
-        .setDescription(
-            "Mostra o perfil de um jogador"
-        )
+        .setDescription("Mostra o perfil de um jogador")
         .addUserOption(option =>
             option
                 .setName("jogador")
-                .setDescription(
-                    "Jogador"
-                )
+                .setDescription("Jogador")
                 .setRequired(false)
         )
 ];
-
 
 // ======================================================
 // REGISTRAR COMANDOS
@@ -403,12 +361,9 @@ const rest = new REST({
 }).setToken(config.token);
 
 async function registerCommands() {
-
     try {
 
-        console.log(
-            "Registrando comandos..."
-        );
+        console.log("Registrando comandos...");
 
         await rest.put(
             Routes.applicationGuildCommands(
@@ -422,16 +377,15 @@ async function registerCommands() {
             }
         );
 
-        console.log(
-            "Comandos registrados!"
-        );
+        console.log("Comandos registrados!");
 
     } catch (error) {
-
-        console.error(error);
+        console.error(
+            "ERRO AO REGISTRAR COMANDOS:",
+            error
+        );
     }
 }
-
 
 // ======================================================
 // INTERAÇÕES
@@ -443,36 +397,30 @@ client.on(
 
         try {
 
-            // ==========================================
+            // ==================================================
             // BOTÕES
-            // ==========================================
+            // ==================================================
 
             if (interaction.isButton()) {
 
-                const userId =
-                    interaction.user.id;
+                const userId = interaction.user.id;
 
-
-                // ENTRAR
-
+                // ENTRAR NA FILA
                 if (
                     interaction.customId ===
                     "queue_join"
                 ) {
 
                     if (
-                        db.queue.includes(
-                            userId
-                        )
+                        db.queue.includes(userId)
                     ) {
 
                         return interaction.reply({
                             content:
                                 "❌ Você já está na fila.",
-                            ephemeral: true
+                            flags: 64
                         });
                     }
-
 
                     if (
                         db.queue.length >=
@@ -482,27 +430,23 @@ client.on(
                         return interaction.reply({
                             content:
                                 "❌ A fila está cheia.",
-                            ephemeral: true
+                            flags: 64
                         });
                     }
-
 
                     db.queue.push(userId);
 
                     saveDatabase();
 
-
                     await interaction.reply({
                         content:
                             `✅ Você entrou na fila!\n📍 Posição: ${db.queue.indexOf(userId) + 1}`,
-                        ephemeral: true
+                        flags: 64
                     });
-
 
                     await updateQueuePanel(
                         interaction.channel
                     );
-
 
                     if (
                         db.queue.length >=
@@ -518,44 +462,33 @@ client.on(
                     return;
                 }
 
-
-                // SAIR
-
+                // SAIR DA FILA
                 if (
                     interaction.customId ===
                     "queue_leave"
                 ) {
 
                     const index =
-                        db.queue.indexOf(
-                            userId
-                        );
-
+                        db.queue.indexOf(userId);
 
                     if (index === -1) {
 
                         return interaction.reply({
                             content:
                                 "❌ Você não está na fila.",
-                            ephemeral: true
+                            flags: 64
                         });
                     }
 
-
-                    db.queue.splice(
-                        index,
-                        1
-                    );
+                    db.queue.splice(index, 1);
 
                     saveDatabase();
-
 
                     await interaction.reply({
                         content:
                             "✅ Você saiu da fila.",
-                        ephemeral: true
+                        flags: 64
                     });
-
 
                     await updateQueuePanel(
                         interaction.channel
@@ -564,9 +497,7 @@ client.on(
                     return;
                 }
 
-
                 // VER FILA
-
                 if (
                     interaction.customId ===
                     "queue_view"
@@ -576,15 +507,16 @@ client.on(
                         embeds: [
                             createQueueEmbed()
                         ],
-                        ephemeral: true
+                        flags: 64
                     });
                 }
+
+                return;
             }
 
-
-            // ==========================================
+            // ==================================================
             // SLASH COMMANDS
-            // ==========================================
+            // ==================================================
 
             if (
                 !interaction.isChatInputCommand()
@@ -592,48 +524,31 @@ client.on(
                 return;
             }
 
-
+            // ==================================================
             // PAINEL
+            // ==================================================
 
-            // PAINEL
+            if (
+                interaction.commandName ===
+                "painel"
+            ) {
 
-if (
-    interaction.commandName ===
-    "painel"
-) {
+                if (
+                    !isStaff(
+                        interaction.member
+                    )
+                ) {
 
-    if (
-        !isStaff(
-            interaction.member
-        )
-    ) {
+                    return interaction.reply({
+                        content:
+                            "❌ Apenas a Staff pode usar este comando.",
+                        flags: 64
+                    });
+                }
 
-        return interaction.reply({
-            content:
-                "❌ Apenas a Staff pode usar este comando.",
-            flags: 64
-        });
-    }
-
-    await interaction.deferReply({
-        flags: 64
-    });
-
-    await interaction.channel.send({
-        embeds: [
-            createQueueEmbed()
-        ],
-        components: [
-            createQueueButtons()
-        ]
-    });
-
-    return interaction.editReply({
-        content:
-            "✅ Painel criado."
-    });
-}
-
+                await interaction.deferReply({
+                    flags: 64
+                });
 
                 await interaction.channel.send({
                     embeds: [
@@ -644,16 +559,15 @@ if (
                     ]
                 });
 
-
-                return interaction.reply({
+                return interaction.editReply({
                     content:
-                        "✅ Painel criado.",
-                    ephemeral: true
+                        "✅ Painel criado."
                 });
             }
 
-
+            // ==================================================
             // FILA
+            // ==================================================
 
             if (
                 interaction.commandName ===
@@ -667,8 +581,9 @@ if (
                 });
             }
 
-
+            // ==================================================
             // LIMPAR FILA
+            // ==================================================
 
             if (
                 interaction.commandName ===
@@ -684,30 +599,31 @@ if (
                     return interaction.reply({
                         content:
                             "❌ Apenas a Staff pode usar este comando.",
-                        ephemeral: true
+                        flags: 64
                     });
                 }
 
+                await interaction.deferReply({
+                    flags: 64
+                });
 
                 db.queue = [];
 
                 saveDatabase();
 
-
-                await interaction.reply(
-                    "🧹 Fila limpa com sucesso."
-                );
-
-
                 await updateQueuePanel(
                     interaction.channel
                 );
 
-                return;
+                return interaction.editReply({
+                    content:
+                        "🧹 Fila limpa com sucesso."
+                });
             }
 
-
+            // ==================================================
             // RESULTADO
+            // ==================================================
 
             if (
                 interaction.commandName ===
@@ -723,10 +639,9 @@ if (
                     return interaction.reply({
                         content:
                             "❌ Apenas a Staff pode registrar resultados.",
-                        ephemeral: true
+                        flags: 64
                     });
                 }
-
 
                 const matchId =
                     interaction.options.getInteger(
@@ -738,24 +653,20 @@ if (
                         "vencedor"
                     );
 
-
                 const match =
                     db.matches.find(
                         m =>
-                            m.id ===
-                            matchId
+                            m.id === matchId
                     );
-
 
                 if (!match) {
 
                     return interaction.reply({
                         content:
                             "❌ Partida não encontrada.",
-                        ephemeral: true
+                        flags: 64
                     });
                 }
-
 
                 if (
                     match.status ===
@@ -765,10 +676,9 @@ if (
                     return interaction.reply({
                         content:
                             "❌ Esta partida já possui resultado.",
-                        ephemeral: true
+                        flags: 64
                     });
                 }
-
 
                 const winners =
                     winner === "A"
@@ -780,7 +690,6 @@ if (
                         ? match.teamB
                         : match.teamA;
 
-
                 winners.forEach(id => {
 
                     const player =
@@ -790,7 +699,6 @@ if (
                     player.points += 3;
                 });
 
-
                 losers.forEach(id => {
 
                     const player =
@@ -799,25 +707,17 @@ if (
                     player.losses++;
                 });
 
-
-                match.status =
-                    "finished";
-
-                match.winner =
-                    winner;
-
+                match.status = "finished";
+                match.winner = winner;
                 match.finishedAt =
                     new Date().toISOString();
 
-
                 saveDatabase();
-
 
                 const resultsChannel =
                     interaction.guild.channels.cache.get(
                         config.channels.results
                     );
-
 
                 const embed =
                     new EmbedBuilder()
@@ -826,24 +726,21 @@ if (
                         )
                         .addFields(
                             {
-                                name:
-                                    "🥇 Vencedor",
+                                name: "🥇 Vencedor",
                                 value:
                                     winner === "A"
                                         ? "🔵 Time A"
                                         : "🔴 Time B"
                             },
                             {
-                                name:
-                                    "Time A",
+                                name: "Time A",
                                 value:
                                     createPlayerList(
                                         match.teamA
                                     )
                             },
                             {
-                                name:
-                                    "Time B",
+                                name: "Time B",
                                 value:
                                     createPlayerList(
                                         match.teamB
@@ -851,186 +748,20 @@ if (
                             }
                         );
 
+                if (resultsChannel) {
 
-            
-
-
-            // RANKING
-
-            if (
-    interaction.commandName ===
-    "painel"
-) {
-
-    if (
-        !isStaff(
-            interaction.member
-        )
-    ) {
-
-        return interaction.reply({
-            content:
-                "❌ Apenas a Staff pode usar este comando.",
-            flags: 64
-        });
-    }
-
-    await interaction.deferReply({
-        flags: 64
-    });
-
-    await interaction.channel.send({
-        embeds: [
-            createQueueEmbed()
-        ],
-        components: [
-            createQueueButtons()
-        ]
-    });
-
-    return interaction.editReply({
-        content:
-            "✅ Painel criado."
-    });
-}
-
-                const rankingText =
-                    ranking
-                        .slice(0, 10)
-                        .map(
-                            (player, index) =>
-                                `${index + 1}. <@${player.id}> — ${player.points} pontos | ${player.wins} vitórias`
-                        )
-                        .join("\n");
-
-                const embed =
-                    new EmbedBuilder()
-                        .setTitle("🏆 RANKING")
-                        .setDescription(
-                            rankingText
-                        )
-                        .setFooter({
-                            text:
-                                "ORG Free Fire • Ranking"
-                        });
+                    await resultsChannel.send({
+                        embeds: [embed]
+                    });
+                }
 
                 return interaction.reply({
-                    embeds: [embed]
-                });
-            }
-
-
-            // PERFIL
-
-            if (
-                interaction.commandName ===
-                "perfil"
-            ) {
-
-                const user =
-                    interaction.options.getUser(
-                        "jogador"
-                    ) || interaction.user;
-
-                const player =
-                    getPlayer(user.id);
-
-                const embed =
-                    new EmbedBuilder()
-                        .setTitle(
-                            `👤 PERFIL — ${user.username}`
-                        )
-                        .setThumbnail(
-                            user.displayAvatarURL()
-                        )
-                        .addFields(
-                            {
-                                name: "🏆 Vitórias",
-                                value:
-                                    `${player.wins}`,
-                                inline: true
-                            },
-                            {
-                                name: "❌ Derrotas",
-                                value:
-                                    `${player.losses}`,
-                                inline: true
-                            },
-                            {
-                                name: "⭐ Pontos",
-                                value:
-                                    `${player.points}`,
-                                inline: true
-                            },
-                            {
-                                name: "🎮 Partidas",
-                                value:
-                                    `${player.matches}`,
-                                inline: true
-                            }
-                        );
-
-                return interaction.reply({
-                    embeds: [embed]
-                });
-            }
-
-                   } catch (error) {
-
-            console.error(
-                "ERRO NO COMANDO:",
-                error
-            );
-
-            if (
-                interaction.deferred ||
-                interaction.replied
-            ) {
-
-                await interaction.editReply({
                     content:
-                        "❌ Ocorreu um erro ao executar o comando."
-                }).catch(() => {});
-
-            } else {
-
-                await interaction.reply({
-                    content:
-                        "❌ Ocorreu um erro ao executar o comando.",
+                        `✅ Resultado da partida #${matchId} registrado.`,
                     flags: 64
-                }).catch(() => {});
+                });
             }
-        }
-    }
-);
 
-
-// ======================================================
-// BOT ONLINE
-// ======================================================
-
-client.once(
-    "ready",
-    async () => {
-
-        console.log(
-            `🤖 Bot online como ${client.user.tag}`
-        );
-
-        await registerCommands();
-    }
-);
-
-
-const http = require("http");
-
-const PORT = process.env.PORT || 3000;
-
-http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end("Bot online!");
-}).listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
-});
-
-client.login(config.token);
+            // ==================================================
+            // RANKING
+            // =========
