@@ -852,26 +852,41 @@ client.on(
             // RANKING
 
             if (
-                interaction.commandName ===
-                "ranking"
-            ) {
+    interaction.commandName ===
+    "painel"
+) {
 
-                const ranking =
-                    Object.values(
-                        db.players
-                                 )
-                    .sort(
-                        (a, b) =>
-                            b.points - a.points
-                    );
+    if (
+        !isStaff(
+            interaction.member
+        )
+    ) {
 
-                if (ranking.length === 0) {
+        return interaction.reply({
+            content:
+                "❌ Apenas a Staff pode usar este comando.",
+            flags: 64
+        });
+    }
 
-                    return interaction.reply({
-                        content:
-                            "📊 Ainda não existem jogadores no ranking."
-                    });
-                }
+    await interaction.deferReply({
+        flags: 64
+    });
+
+    await interaction.channel.send({
+        embeds: [
+            createQueueEmbed()
+        ],
+        components: [
+            createQueueButtons()
+        ]
+    });
+
+    return interaction.editReply({
+        content:
+            "✅ Painel criado."
+    });
+}
 
                 const rankingText =
                     ranking
