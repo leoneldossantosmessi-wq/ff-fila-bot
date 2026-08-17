@@ -988,7 +988,7 @@ client.once(
 );
 
 
-clienconst http = require("http");
+const http = require("http");
 
 const PORT = process.env.PORT || 3000;
 
