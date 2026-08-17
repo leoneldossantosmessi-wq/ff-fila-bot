@@ -999,4 +999,4 @@ http.createServer((req, res) => {
     console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
 });
 
-client.login(TOKEN);
+client.login(config.token);
