@@ -1,0 +1,20 @@
+{
+  "token": "",
+  "clientId": "COLOCA_O_ID_DO_BOT_AQUI",
+  "guildId": "COLOCA_O_ID_DO_SERVIDOR_AQUI",
+
+  "queue": {
+    "maxPlayers": 8,
+    "playersPerTeam": 4
+  },
+
+  "channels": {
+    "queue": "ID_DO_CANAL_DA_FILA",
+    "results": "ID_DO_CANAL_DE_RESULTADOS",
+    "logs": "ID_DO_CANAL_DE_LOGS"
+  },
+
+  "roles": {
+    "staff": "ID_DO_CARGO_STAFF"
+  }
+}
