@@ -954,22 +954,24 @@ client.on(
                 });
             }
 
-            } catch (error) {
+           } catch (error) {
 
-            console.error("ERRO NO COMANDO:", error);
+    console.error("ERRO NO COMANDO:", error);
 
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({
-                    content: "❌ Ocorreu um erro ao executar o comando."
-                }).catch(() => {});
-            } else {
-                await interaction.reply({
-                    content: "❌ Ocorreu um erro ao executar o comando.",
-                    flags: 64
-                }).catch(() => {});
-            }
-        }
+    if (interaction.deferred || interaction.replied) {
+
+        await interaction.editReply({
+            content: "❌ Ocorreu um erro ao executar o comando."
+        }).catch(() => {});
+
+    } else {
+
+        await interaction.reply({
+            content: "❌ Ocorreu um erro ao executar o comando.",
+            flags: 64
+        }).catch(() => {});
     }
+} 
 );
 
 
