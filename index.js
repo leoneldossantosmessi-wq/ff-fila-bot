@@ -595,23 +595,44 @@ client.on(
 
             // PAINEL
 
-            if (
-                interaction.commandName ===
-                "painel"
-            ) {
+            // PAINEL
 
-                if (
-                    !isStaff(
-                        interaction.member
-                    )
-                ) {
+if (
+    interaction.commandName ===
+    "painel"
+) {
 
-                    return interaction.reply({
-                        content:
-                            "❌ Apenas a Staff pode usar este comando.",
-                        ephemeral: true
-                    });
-                }
+    if (
+        !isStaff(
+            interaction.member
+        )
+    ) {
+
+        return interaction.reply({
+            content:
+                "❌ Apenas a Staff pode usar este comando.",
+            flags: 64
+        });
+    }
+
+    await interaction.deferReply({
+        flags: 64
+    });
+
+    await interaction.channel.send({
+        embeds: [
+            createQueueEmbed()
+        ],
+        components: [
+            createQueueButtons()
+        ]
+    });
+
+    return interaction.editReply({
+        content:
+            "✅ Painel criado."
+    });
+}
 
 
                 await interaction.channel.send({
@@ -831,22 +852,7 @@ client.on(
                         );
 
 
-                if (resultsChannel) {
-
-                    await resultsChannel.send({
-                        embeds: [
-                            embed
-                        ]
-                    });
-                }
-
-
-                return interaction.reply({
-                    content:
-                        `✅ Resultado da partida #${matchId} registrado.`,
-                    ephemeral: true
-                });
-            }
+            
 
 
             // RANKING
