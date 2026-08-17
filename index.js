@@ -859,4 +859,133 @@ client.on(
                 const ranking =
                     Object.values(
                         db.players
-             
+                                 )
+                    .sort(
+                        (a, b) =>
+                            b.points - a.points
+                    );
+
+                if (ranking.length === 0) {
+
+                    return interaction.reply({
+                        content:
+                            "📊 Ainda não existem jogadores no ranking."
+                    });
+                }
+
+                const rankingText =
+                    ranking
+                        .slice(0, 10)
+                        .map(
+                            (player, index) =>
+                                `${index + 1}. <@${player.id}> — ${player.points} pontos | ${player.wins} vitórias`
+                        )
+                        .join("\n");
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle("🏆 RANKING")
+                        .setDescription(
+                            rankingText
+                        )
+                        .setFooter({
+                            text:
+                                "ORG Free Fire • Ranking"
+                        });
+
+                return interaction.reply({
+                    embeds: [embed]
+                });
+            }
+
+
+            // PERFIL
+
+            if (
+                interaction.commandName ===
+                "perfil"
+            ) {
+
+                const user =
+                    interaction.options.getUser(
+                        "jogador"
+                    ) || interaction.user;
+
+                const player =
+                    getPlayer(user.id);
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            `👤 PERFIL — ${user.username}`
+                        )
+                        .setThumbnail(
+                            user.displayAvatarURL()
+                        )
+                        .addFields(
+                            {
+                                name: "🏆 Vitórias",
+                                value:
+                                    `${player.wins}`,
+                                inline: true
+                            },
+                            {
+                                name: "❌ Derrotas",
+                                value:
+                                    `${player.losses}`,
+                                inline: true
+                            },
+                            {
+                                name: "⭐ Pontos",
+                                value:
+                                    `${player.points}`,
+                                inline: true
+                            },
+                            {
+                                name: "🎮 Partidas",
+                                value:
+                                    `${player.matches}`,
+                                inline: true
+                            }
+                        );
+
+                return interaction.reply({
+                    embeds: [embed]
+                });
+            }
+
+        } catch (error) {
+
+            console.error(error);
+
+            if (!interaction.replied) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Ocorreu um erro ao executar o comando.",
+                    ephemeral: true
+                });
+            }
+        }
+    }
+);
+
+
+// ======================================================
+// BOT ONLINE
+// ======================================================
+
+client.once(
+    "ready",
+    async () => {
+
+        console.log(
+            `🤖 Bot online como ${client.user.tag}`
+        );
+
+        await registerCommands();
+    }
+);
+
+
+client.login(config.token);
