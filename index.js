@@ -16,6 +16,10 @@ const path = require("path");
 
 const config = require("./config.json");
 
+config.token = process.env.TOKEN || config.token;
+config.clientId = process.env.CLIENT_ID || config.clientId;
+config.guildId = process.env.GUILD_ID || config.guildId;
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
