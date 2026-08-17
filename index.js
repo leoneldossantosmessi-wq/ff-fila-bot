@@ -13,6 +13,7 @@ const {
 
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 
 const config = require("./config.json");
 
@@ -27,6 +28,7 @@ const client = new Client({
     ]
 });
 
+
 // ======================================================
 // BANCO DE DADOS
 // ======================================================
@@ -35,18 +37,22 @@ const dataDir = path.join(__dirname, "data");
 const databaseFile = path.join(dataDir, "database.json");
 
 if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir);
+    fs.mkdirSync(dataDir, { recursive: true });
 }
 
 if (!fs.existsSync(databaseFile)) {
     fs.writeFileSync(
         databaseFile,
-        JSON.stringify({
-            players: {},
-            queue: [],
-            matches: [],
-            matchCounter: 0
-        }, null, 2)
+        JSON.stringify(
+            {
+                players: {},
+                queue: [],
+                matches: [],
+                matchCounter: 0
+            },
+            null,
+            2
+        )
     );
 }
 
@@ -61,6 +67,7 @@ function saveDatabase() {
     );
 }
 
+
 // ======================================================
 // FUNÇÕES AUXILIARES
 // ======================================================
@@ -72,12 +79,21 @@ function isStaff(member) {
         member.permissions.has(
             PermissionsBitField.Flags.Administrator
         ) ||
-        member.roles.cache.has(config.roles.staff)
+        (
+            config.roles &&
+            config.roles.staff &&
+            member.roles.cache.has(
+                config.roles.staff
+            )
+        )
     );
 }
 
+
 function getPlayer(userId) {
+
     if (!db.players[userId]) {
+
         db.players[userId] = {
             id: userId,
             wins: 0,
@@ -92,18 +108,25 @@ function getPlayer(userId) {
     return db.players[userId];
 }
 
+
 function createPlayerList(ids) {
-    if (ids.length === 0) {
+
+    if (!ids || ids.length === 0) {
         return "Nenhum jogador.";
     }
 
     return ids
-        .map((id, index) => `${index + 1}. <@${id}>`)
+        .map(
+            (id, index) =>
+                `${index + 1}. <@${id}>`
+        )
         .join("\n");
 }
 
+
 function createQueueEmbed() {
-    const queue = db.queue;
+
+    const queue = db.queue || [];
 
     return new EmbedBuilder()
         .setTitle("🎮 FILA DE APOSTADOS")
@@ -113,7 +136,8 @@ function createQueueEmbed() {
         .addFields(
             {
                 name: "👥 Jogadores",
-                value: `${queue.length}/${config.queue.maxPlayers}`,
+                value:
+                    `${queue.length}/${config.queue.maxPlayers}`,
                 inline: true
             },
             {
@@ -123,55 +147,70 @@ function createQueueEmbed() {
             }
         )
         .setFooter({
-            text: "ORG Free Fire • Sistema de Filas"
+            text:
+                "ORG Free Fire • Sistema de Filas"
         });
 }
 
+
 function createQueueButtons() {
-    return new ActionRowBuilder().addComponents(
 
-        new ButtonBuilder()
-            .setCustomId("queue_join")
-            .setLabel("ENTRAR NA FILA")
-            .setEmoji("🎮")
-            .setStyle(ButtonStyle.Success),
+    return new ActionRowBuilder()
+        .addComponents(
 
-        new ButtonBuilder()
-            .setCustomId("queue_leave")
-            .setLabel("SAIR DA FILA")
-            .setEmoji("🚪")
-            .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId("queue_join")
+                .setLabel("ENTRAR NA FILA")
+                .setEmoji("🎮")
+                .setStyle(ButtonStyle.Success),
 
-        new ButtonBuilder()
-            .setCustomId("queue_view")
-            .setLabel("VER FILA")
-            .setEmoji("📋")
-            .setStyle(ButtonStyle.Primary)
-    );
+            new ButtonBuilder()
+                .setCustomId("queue_leave")
+                .setLabel("SAIR DA FILA")
+                .setEmoji("🚪")
+                .setStyle(ButtonStyle.Danger),
+
+            new ButtonBuilder()
+                .setCustomId("queue_view")
+                .setLabel("VER FILA")
+                .setEmoji("📋")
+                .setStyle(ButtonStyle.Primary)
+        );
 }
+
 
 // ======================================================
 // ATUALIZAR PAINEL
 // ======================================================
 
 async function updateQueuePanel(channel) {
-    const messages = await channel.messages.fetch({
-        limit: 20
-    });
 
-    const panel = messages.find(
-        msg =>
-            msg.author.id === client.user.id &&
-            msg.components.length > 0
-    );
+    if (!channel) return;
+
+    const messages =
+        await channel.messages.fetch({
+            limit: 20
+        });
+
+    const panel =
+        messages.find(
+            msg =>
+                msg.author.id === client.user.id &&
+                msg.components.length > 0
+        );
 
     if (!panel) return;
 
     await panel.edit({
-        embeds: [createQueueEmbed()],
-        components: [createQueueButtons()]
+        embeds: [
+            createQueueEmbed()
+        ],
+        components: [
+            createQueueButtons()
+        ]
     });
 }
+
 
 // ======================================================
 // CRIAR PARTIDA
@@ -186,106 +225,142 @@ async function createMatch(guild, channel) {
         return;
     }
 
-    const players = [...db.queue];
+    const players = [
+        ...db.queue
+    ];
 
     db.queue = [];
 
     db.matchCounter++;
 
-    const matchId = db.matchCounter;
+    const matchId =
+        db.matchCounter;
 
-    const shuffled = [...players].sort(
-        () => Math.random() - 0.5
-    );
+    const shuffled =
+        [...players].sort(
+            () => Math.random() - 0.5
+        );
 
-    const teamA = shuffled.slice(
-        0,
-        config.queue.playersPerTeam
-    );
+    const teamA =
+        shuffled.slice(
+            0,
+            config.queue.playersPerTeam
+        );
 
-    const teamB = shuffled.slice(
-        config.queue.playersPerTeam,
-        config.queue.maxPlayers
-    );
+    const teamB =
+        shuffled.slice(
+            config.queue.playersPerTeam,
+            config.queue.maxPlayers
+        );
 
     const match = {
         id: matchId,
-        players,
-        teamA,
-        teamB,
+        players: players,
+        teamA: teamA,
+        teamB: teamB,
         status: "waiting",
         winner: null,
-        createdAt: new Date().toISOString()
+        createdAt:
+            new Date().toISOString()
     };
 
     db.matches.push(match);
 
     players.forEach(id => {
-        const player = getPlayer(id);
+
+        const player =
+            getPlayer(id);
+
         player.matches++;
     });
 
     saveDatabase();
 
-    const embed = new EmbedBuilder()
-        .setTitle(`🔥 PARTIDA #${matchId}`)
-        .setDescription(
-            "A fila está completa! Uma nova partida foi criada."
-        )
-        .addFields(
-            {
-                name: "🔵 TIME A",
-                value: createPlayerList(teamA)
-            },
-            {
-                name: "🔴 TIME B",
-                value: createPlayerList(teamB)
-            },
-            {
-                name: "📊 Status",
-                value: "Aguardando resultado"
-            }
-        )
-        .setFooter({
-            text: "Boa partida!"
-        });
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `🔥 PARTIDA #${matchId}`
+            )
+            .setDescription(
+                "A fila está completa! Uma nova partida foi criada."
+            )
+            .addFields(
+                {
+                    name: "🔵 TIME A",
+                    value:
+                        createPlayerList(teamA)
+                },
+                {
+                    name: "🔴 TIME B",
+                    value:
+                        createPlayerList(teamB)
+                },
+                {
+                    name: "📊 Status",
+                    value:
+                        "Aguardando resultado"
+                }
+            )
+            .setFooter({
+                text:
+                    "Boa partida!"
+            });
 
     await channel.send({
-        content: players
-            .map(id => `<@${id}>`)
-            .join(" "),
+        content:
+            players
+                .map(
+                    id => `<@${id}>`
+                )
+                .join(" "),
         embeds: [embed]
     });
 
-    const logsChannel =
-        guild.channels.cache.get(
-            config.channels.logs
-        );
+    if (
+        config.channels &&
+        config.channels.logs
+    ) {
 
-    if (logsChannel) {
-        await logsChannel.send({
-            embeds: [
-                new EmbedBuilder()
-                    .setTitle("📝 Nova partida")
-                    .setDescription(
-                        `Partida #${matchId} criada.`
-                    )
-                    .addFields(
-                        {
-                            name: "Time A",
-                            value: createPlayerList(teamA)
-                        },
-                        {
-                            name: "Time B",
-                            value: createPlayerList(teamB)
-                        }
-                    )
-            ]
-        });
+        const logsChannel =
+            guild.channels.cache.get(
+                config.channels.logs
+            );
+
+        if (logsChannel) {
+
+            await logsChannel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle(
+                            "📝 Nova partida"
+                        )
+                        .setDescription(
+                            `Partida #${matchId} criada.`
+                        )
+                        .addFields(
+                            {
+                                name: "Time A",
+                                value:
+                                    createPlayerList(
+                                        teamA
+                                    )
+                            },
+                            {
+                                name: "Time B",
+                                value:
+                                    createPlayerList(
+                                        teamB
+                                    )
+                            }
+                        )
+                ]
+            });
+        }
     }
 
     await updateQueuePanel(channel);
 }
+
 
 // ======================================================
 // COMANDOS
@@ -295,35 +370,47 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("painel")
-        .setDescription("Cria o painel da fila")
+        .setDescription(
+            "Cria o painel da fila"
+        )
         .setDefaultMemberPermissions(
             PermissionsBitField.Flags.Administrator.toString()
         ),
 
     new SlashCommandBuilder()
         .setName("fila")
-        .setDescription("Mostra a fila atual"),
+        .setDescription(
+            "Mostra a fila atual"
+        ),
 
     new SlashCommandBuilder()
         .setName("limparfila")
-        .setDescription("Limpa a fila")
+        .setDescription(
+            "Limpa a fila"
+        )
         .setDefaultMemberPermissions(
             PermissionsBitField.Flags.Administrator.toString()
         ),
 
     new SlashCommandBuilder()
         .setName("resultado")
-        .setDescription("Registra o resultado de uma partida")
+        .setDescription(
+            "Registra o resultado de uma partida"
+        )
         .addIntegerOption(option =>
             option
                 .setName("partida")
-                .setDescription("Número da partida")
+                .setDescription(
+                    "Número da partida"
+                )
                 .setRequired(true)
         )
         .addStringOption(option =>
             option
                 .setName("vencedor")
-                .setDescription("Time vencedor")
+                .setDescription(
+                    "Time vencedor"
+                )
                 .setRequired(true)
                 .addChoices(
                     {
@@ -339,31 +426,45 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Mostra o ranking dos jogadores"),
+        .setDescription(
+            "Mostra o ranking dos jogadores"
+        ),
 
     new SlashCommandBuilder()
         .setName("perfil")
-        .setDescription("Mostra o perfil de um jogador")
+        .setDescription(
+            "Mostra o perfil de um jogador"
+        )
         .addUserOption(option =>
             option
                 .setName("jogador")
-                .setDescription("Jogador")
+                .setDescription(
+                    "Jogador"
+                )
                 .setRequired(false)
         )
 ];
+
 
 // ======================================================
 // REGISTRAR COMANDOS
 // ======================================================
 
-const rest = new REST({
-    version: "10"
-}).setToken(config.token);
+const rest =
+    new REST({
+        version: "10"
+    }).setToken(
+        config.token
+    );
+
 
 async function registerCommands() {
+
     try {
 
-        console.log("Registrando comandos...");
+        console.log(
+            "Registrando comandos..."
+        );
 
         await rest.put(
             Routes.applicationGuildCommands(
@@ -371,21 +472,27 @@ async function registerCommands() {
                 config.guildId
             ),
             {
-                body: commands.map(
-                    command => command.toJSON()
-                )
+                body:
+                    commands.map(
+                        command =>
+                            command.toJSON()
+                    )
             }
         );
 
-        console.log("Comandos registrados!");
+        console.log(
+            "Comandos registrados!"
+        );
 
     } catch (error) {
+
         console.error(
             "ERRO AO REGISTRAR COMANDOS:",
             error
         );
     }
 }
+
 
 // ======================================================
 // INTERAÇÕES
@@ -403,16 +510,21 @@ client.on(
 
             if (interaction.isButton()) {
 
-                const userId = interaction.user.id;
+                const userId =
+                    interaction.user.id;
+
 
                 // ENTRAR NA FILA
+
                 if (
                     interaction.customId ===
                     "queue_join"
                 ) {
 
                     if (
-                        db.queue.includes(userId)
+                        db.queue.includes(
+                            userId
+                        )
                     ) {
 
                         return interaction.reply({
@@ -434,13 +546,19 @@ client.on(
                         });
                     }
 
-                    db.queue.push(userId);
+                    db.queue.push(
+                        userId
+                    );
 
                     saveDatabase();
 
                     await interaction.reply({
                         content:
-                            `✅ Você entrou na fila!\n📍 Posição: ${db.queue.indexOf(userId) + 1}`,
+                            `✅ Você entrou na fila!\n📍 Posição: ${
+                                db.queue.indexOf(
+                                    userId
+                                ) + 1
+                            }`,
                         flags: 64
                     });
 
@@ -462,14 +580,18 @@ client.on(
                     return;
                 }
 
+
                 // SAIR DA FILA
+
                 if (
                     interaction.customId ===
                     "queue_leave"
                 ) {
 
                     const index =
-                        db.queue.indexOf(userId);
+                        db.queue.indexOf(
+                            userId
+                        );
 
                     if (index === -1) {
 
@@ -480,7 +602,10 @@ client.on(
                         });
                     }
 
-                    db.queue.splice(index, 1);
+                    db.queue.splice(
+                        index,
+                        1
+                    );
 
                     saveDatabase();
 
@@ -497,7 +622,9 @@ client.on(
                     return;
                 }
 
+
                 // VER FILA
+
                 if (
                     interaction.customId ===
                     "queue_view"
@@ -514,6 +641,7 @@ client.on(
                 return;
             }
 
+
             // ==================================================
             // SLASH COMMANDS
             // ==================================================
@@ -523,6 +651,7 @@ client.on(
             ) {
                 return;
             }
+
 
             // ==================================================
             // PAINEL
@@ -565,6 +694,7 @@ client.on(
                 });
             }
 
+
             // ==================================================
             // FILA
             // ==================================================
@@ -580,6 +710,7 @@ client.on(
                     ]
                 });
             }
+
 
             // ==================================================
             // LIMPAR FILA
@@ -621,6 +752,7 @@ client.on(
                 });
             }
 
+
             // ==================================================
             // RESULTADO
             // ==================================================
@@ -656,7 +788,8 @@ client.on(
                 const match =
                     db.matches.find(
                         m =>
-                            m.id === matchId
+                            m.id ===
+                            matchId
                     );
 
                 if (!match) {
@@ -690,34 +823,37 @@ client.on(
                         ? match.teamB
                         : match.teamA;
 
-                winners.forEach(id => {
+                winners.forEach(
+                    id => {
 
-                    const player =
-                        getPlayer(id);
+                        const player =
+                            getPlayer(id);
 
-                    player.wins++;
-                    player.points += 3;
-                });
+                        player.wins++;
+                        player.points += 3;
+                    }
+                );
 
-                losers.forEach(id => {
+                losers.forEach(
+                    id => {
 
-                    const player =
-                        getPlayer(id);
+                        const player =
+                            getPlayer(id);
 
-                    player.losses++;
-                });
+                        player.losses++;
+                    }
+                );
 
-                match.status = "finished";
-                match.winner = winner;
+                match.status =
+                    "finished";
+
+                match.winner =
+                    winner;
+
                 match.finishedAt =
                     new Date().toISOString();
 
                 saveDatabase();
-
-                const resultsChannel =
-                    interaction.guild.channels.cache.get(
-                        config.channels.results
-                    );
 
                 const embed =
                     new EmbedBuilder()
@@ -726,21 +862,24 @@ client.on(
                         )
                         .addFields(
                             {
-                                name: "🥇 Vencedor",
+                                name:
+                                    "🥇 Vencedor",
                                 value:
                                     winner === "A"
                                         ? "🔵 Time A"
                                         : "🔴 Time B"
                             },
                             {
-                                name: "Time A",
+                                name:
+                                    "Time A",
                                 value:
                                     createPlayerList(
                                         match.teamA
                                     )
                             },
                             {
-                                name: "Time B",
+                                name:
+                                    "Time B",
                                 value:
                                     createPlayerList(
                                         match.teamB
@@ -748,11 +887,24 @@ client.on(
                             }
                         );
 
-                if (resultsChannel) {
+                if (
+                    config.channels &&
+                    config.channels.results
+                ) {
 
-                    await resultsChannel.send({
-                        embeds: [embed]
-                    });
+                    const resultsChannel =
+                        interaction.guild.channels.cache.get(
+                            config.channels.results
+                        );
+
+                    if (resultsChannel) {
+
+                        await resultsChannel.send({
+                            embeds: [
+                                embed
+                            ]
+                        });
+                    }
                 }
 
                 return interaction.reply({
@@ -762,7 +914,8 @@ client.on(
                 });
             }
 
-                        // ==================================================
+
+            // ==================================================
             // RANKING
             // ==================================================
 
@@ -772,13 +925,17 @@ client.on(
             ) {
 
                 const ranking =
-                    Object.values(db.players)
-                        .sort(
-                            (a, b) =>
-                                b.points - a.points
-                        );
+                    Object.values(
+                        db.players
+                    ).sort(
+                        (a, b) =>
+                            b.points -
+                            a.points
+                    );
 
-                if (ranking.length === 0) {
+                if (
+                    ranking.length === 0
+                ) {
 
                     return interaction.reply({
                         content:
@@ -797,7 +954,9 @@ client.on(
 
                 const embed =
                     new EmbedBuilder()
-                        .setTitle("🏆 RANKING")
+                        .setTitle(
+                            "🏆 RANKING"
+                        )
                         .setDescription(
                             rankingText
                         )
@@ -807,9 +966,12 @@ client.on(
                         });
 
                 return interaction.reply({
-                    embeds: [embed]
+                    embeds: [
+                        embed
+                    ]
                 });
             }
+
 
             // ==================================================
             // PERFIL
@@ -823,10 +985,13 @@ client.on(
                 const user =
                     interaction.options.getUser(
                         "jogador"
-                    ) || interaction.user;
+                    ) ||
+                    interaction.user;
 
                 const player =
-                    getPlayer(user.id);
+                    getPlayer(
+                        user.id
+                    );
 
                 const embed =
                     new EmbedBuilder()
@@ -838,25 +1003,29 @@ client.on(
                         )
                         .addFields(
                             {
-                                name: "🏆 Vitórias",
+                                name:
+                                    "🏆 Vitórias",
                                 value:
                                     `${player.wins}`,
                                 inline: true
                             },
                             {
-                                name: "❌ Derrotas",
+                                name:
+                                    "❌ Derrotas",
                                 value:
                                     `${player.losses}`,
                                 inline: true
                             },
                             {
-                                name: "⭐ Pontos",
+                                name:
+                                    "⭐ Pontos",
                                 value:
                                     `${player.points}`,
                                 inline: true
                             },
                             {
-                                name: "🎮 Partidas",
+                                name:
+                                    "🎮 Partidas",
                                 value:
                                     `${player.matches}`,
                                 inline: true
@@ -864,7 +1033,9 @@ client.on(
                         );
 
                 return interaction.reply({
-                    embeds: [embed]
+                    embeds: [
+                        embed
+                    ]
                 });
             }
 
@@ -894,13 +1065,12 @@ client.on(
                             "❌ Ocorreu um erro ao executar o comando.",
                         flags: 64
                     });
-
                 }
 
             } catch (replyError) {
 
                 console.error(
-                    "ERRO AO RESPONDER À INTERAÇÃO:",
+                    "ERRO AO RESPONDER:",
                     replyError
                 );
             }
@@ -929,8 +1099,6 @@ client.once(
 // ======================================================
 // SERVIDOR HTTP — RENDER
 // ======================================================
-
-const http = require("http");
 
 const PORT =
     process.env.PORT || 3000;
