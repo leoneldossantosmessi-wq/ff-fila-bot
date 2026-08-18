@@ -812,83 +812,88 @@ client.on(
                 // ENTRAR
                 // ==================================================
 
-                if (
-                    interaction.customId ===
-                    "queue_join"
-                ) {
+               if (
+    interaction.customId ===
+    "queue_join"
+) {
 
-                    if (
-                        db.queue.includes(
-                            userId
-                        )
-                    ) {
+    if (
+        db.queue.includes(
+            userId
+        )
+    ) {
 
-                        return interaction.reply({
+        return interaction.reply({
+            content:
+                "❌ Você já está na fila.",
+            flags: 64
+        });
+    }
 
-                            content:
-                                "❌ Você já está na fila.",
+    const maxPlayers =
+        getMaxPlayers();
 
-                            flags: 64
-                        });
-                    }
+    if (
+        db.queue.length >=
+        maxPlayers
+    ) {
 
-                    const maxPlayers =
-                        getMaxPlayers();
+        return interaction.reply({
+            content:
+                "❌ A fila está cheia.",
+            flags: 64
+        });
+    }
 
-                    if (
-                        db.queue.length >=
-                        maxPlayers
-                    ) {
+    db.queue.push(
+        userId
+    );
 
-                        return interaction.reply({
+    getPlayer(
+        userId
+    );
 
-                            content:
-                                "❌ A fila está cheia.",
+    saveDatabase();
 
-                            flags: 64
-                        });
-                    }
+    // Responde imediatamente ao botão
+    await interaction.reply({
+        content:
+            `✅ Você entrou na fila!\n📍 Posição: ${
+                db.queue.indexOf(
+                    userId
+                ) + 1
+            }/${maxPlayers}`,
+        flags: 64
+    });
 
-                    db.queue.push(
-                        userId
-                    );
+    // Atualiza o painel depois da resposta
+    try {
 
-                    getPlayer(
-                        userId
-                    );
+        await updateQueuePanel(
+            interaction.channel
+        );
 
-                    saveDatabase();
+        if (
+            db.queue.length >=
+            maxPlayers
+        ) {
 
-                    await interaction.reply({
+            await createMatch(
+                interaction.guild,
+                interaction.channel
+            );
+        }
 
-                        content:
-                            `✅ Você entrou na fila!\n📍 Posição: ${
-                                db.queue.indexOf(
-                                    userId
-                                ) + 1
-                            }/${maxPlayers}`,
+    } catch (error) {
 
-                        flags: 64
-                    });
+        console.error(
+            "❌ Erro ao atualizar a fila/criar partida:",
+            error
+        );
+    }
 
-                    await updateQueuePanel(
-                        interaction.channel
-                    );
-
-                                        // Criar partida quando chegar a 8
-                    if (
-                        db.queue.length >=
-                        maxPlayers
-                    ) {
-
-                        await createMatch(
-                            interaction.guild,
-                            interaction.channel
-                        );
-                    }
-
-                    return;
-                }
+    return;
+}
 
                 // ==================================================
                 // SAIR
