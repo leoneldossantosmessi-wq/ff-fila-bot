@@ -856,7 +856,7 @@ try {
 
     const notificationChannel =
         await client.channels.fetch(
-            "1538169849002594354"
+            "1539247910129111050"
         );
 
     if (
