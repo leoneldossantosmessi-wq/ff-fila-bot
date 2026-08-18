@@ -13,7 +13,6 @@ const {
 
 const fs = require("fs");
 const path = require("path");
-const http = require("http");
 
 const config = require("./config.json");
 
@@ -40,6 +39,10 @@ if (!config.guildId) {
     process.exit(1);
 }
 
+// ======================================================
+// CLIENT
+// ======================================================
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -60,15 +63,23 @@ if (!fs.existsSync(dataDir)) {
     });
 }
 
+function createDefaultDatabase() {
+    return {
+        players: {},
+        queue: [],
+        matches: [],
+        matchCounter: 0
+    };
+}
+
 if (!fs.existsSync(databaseFile)) {
     fs.writeFileSync(
         databaseFile,
-        JSON.stringify({
-            players: {},
-            queue: [],
-            matches: [],
-            matchCounter: 0
-        }, null, 2)
+        JSON.stringify(
+            createDefaultDatabase(),
+            null,
+            2
+        )
     );
 }
 
@@ -76,8 +87,18 @@ let db;
 
 try {
     db = JSON.parse(
-        fs.readFileSync(databaseFile, "utf8")
+        fs.readFileSync(
+            databaseFile,
+            "utf8"
+        )
     );
+
+    // Proteção caso faltem propriedades
+    db.players ??= {};
+    db.queue ??= [];
+    db.matches ??= [];
+    db.matchCounter ??= 0;
+
 } catch (error) {
 
     console.error(
@@ -85,25 +106,38 @@ try {
         error
     );
 
-    db = {
-        players: {},
-        queue: [],
-        matches: [],
-        matchCounter: 0
-    };
+    db = createDefaultDatabase();
 
     fs.writeFileSync(
         databaseFile,
-        JSON.stringify(db, null, 2)
+        JSON.stringify(
+            db,
+            null,
+            2
+        )
     );
 }
 
 function saveDatabase() {
 
-    fs.writeFileSync(
-        databaseFile,
-        JSON.stringify(db, null, 2)
-    );
+    try {
+
+        fs.writeFileSync(
+            databaseFile,
+            JSON.stringify(
+                db,
+                null,
+                2
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ Erro ao salvar banco de dados:",
+            error
+        );
+    }
 }
 
 // ======================================================
@@ -116,19 +150,38 @@ function isStaff(member) {
         return false;
     }
 
-    return (
+    if (
+        member.permissions &&
         member.permissions.has(
             PermissionsBitField.Flags.Administrator
-        ) ||
-        (
-            config.roles &&
-            config.roles.staff &&
-            member.roles.cache.has(
-                config.roles.staff
-            )
+        )
+    ) {
+        return true;
+    }
+
+    return Boolean(
+        config.roles &&
+        config.roles.staff &&
+        member.roles &&
+        member.roles.cache.has(
+            config.roles.staff
         )
     );
 }
+
+// ======================================================
+// MÁXIMO DA FILA
+// ======================================================
+
+function getMaxPlayers() {
+
+    // A fila deste bot fica limitada a 8.
+    return 8;
+}
+
+// ======================================================
+// JOGADOR
+// ======================================================
 
 function getPlayer(userId) {
 
@@ -148,6 +201,10 @@ function getPlayer(userId) {
     return db.players[userId];
 }
 
+// ======================================================
+// LISTA DE JOGADORES
+// ======================================================
+
 function createPlayerList(ids) {
 
     if (!ids || ids.length === 0) {
@@ -162,12 +219,14 @@ function createPlayerList(ids) {
         .join("\n");
 }
 
+// ======================================================
+// EMBED DA FILA
+// ======================================================
+
 function createQueueEmbed() {
 
     const queue = db.queue || [];
-
-    const maxPlayers =
-        config.queue?.maxPlayers || 10;
+    const maxPlayers = getMaxPlayers();
 
     return new EmbedBuilder()
         .setTitle("🎮 FILA DE APOSTADOS")
@@ -193,6 +252,10 @@ function createQueueEmbed() {
                 "ORG Free Fire • Sistema de Filas"
         });
 }
+
+// ======================================================
+// BOTÕES DA FILA
+// ======================================================
 
 function createQueueButtons() {
 
@@ -273,7 +336,7 @@ async function updateQueuePanel(channel) {
 }
 
 // ======================================================
-// CRIAR PARTIDA
+// CRIAR PARTIDA AUTOMÁTICA COM 8
 // ======================================================
 
 async function createMatch(
@@ -281,12 +344,12 @@ async function createMatch(
     channel
 ) {
 
-    const maxPlayers =
-        config.queue?.maxPlayers || 10;
+    const maxPlayers = getMaxPlayers();
 
     const playersPerTeam =
-        config.queue?.playersPerTeam ||
-        Math.floor(maxPlayers / 2);
+        Math.floor(
+            maxPlayers / 2
+        );
 
     if (
         db.queue.length <
@@ -296,9 +359,15 @@ async function createMatch(
     }
 
     const players =
-        [...db.queue];
+        [...db.queue].slice(
+            0,
+            maxPlayers
+        );
 
-    db.queue = [];
+    db.queue =
+        db.queue.slice(
+            maxPlayers
+        );
 
     db.matchCounter++;
 
@@ -342,13 +411,15 @@ async function createMatch(
 
     db.matches.push(match);
 
-    players.forEach(id => {
+    players.forEach(
+        id => {
 
-        const player =
-            getPlayer(id);
+            const player =
+                getPlayer(id);
 
-        player.matches++;
-    });
+            player.matches++;
+        }
+    );
 
     saveDatabase();
 
@@ -458,14 +529,19 @@ async function createMatch(
 
 const commands = [
 
+    // ==================================================
+    // PAINEL
+    // ==================================================
+
     new SlashCommandBuilder()
         .setName("painel")
         .setDescription(
             "Cria o painel da fila"
-        )
-        .setDefaultMemberPermissions(
-            PermissionsBitField.Flags.Administrator.toString()
         ),
+
+    // ==================================================
+    // FILA
+    // ==================================================
 
     new SlashCommandBuilder()
         .setName("fila")
@@ -473,14 +549,19 @@ const commands = [
             "Mostra a fila atual"
         ),
 
+    // ==================================================
+    // LIMPAR FILA
+    // ==================================================
+
     new SlashCommandBuilder()
         .setName("limparfila")
         .setDescription(
             "Limpa a fila"
-        )
-        .setDefaultMemberPermissions(
-            PermissionsBitField.Flags.Administrator.toString()
         ),
+
+    // ==================================================
+    // RESULTADO
+    // ==================================================
 
     new SlashCommandBuilder()
         .setName("resultado")
@@ -516,11 +597,19 @@ const commands = [
                     )
         ),
 
+    // ==================================================
+    // RANKING
+    // ==================================================
+
     new SlashCommandBuilder()
         .setName("ranking")
         .setDescription(
             "Mostra o ranking dos jogadores"
         ),
+
+    // ==================================================
+    // PERFIL
+    // ==================================================
 
     new SlashCommandBuilder()
         .setName("perfil")
@@ -535,6 +624,116 @@ const commands = [
                         "Jogador"
                     )
                     .setRequired(false)
+        ),
+
+    // ==================================================
+    // SALA
+    // ==================================================
+
+    new SlashCommandBuilder()
+        .setName("sala")
+        .setDescription(
+            "Envia o ID e senha da sala para os jogadores escolhidos."
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador1")
+                    .setDescription(
+                        "Primeiro jogador"
+                    )
+                    .setRequired(true)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador2")
+                    .setDescription(
+                        "Segundo jogador"
+                    )
+                    .setRequired(true)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador3")
+                    .setDescription(
+                        "Terceiro jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador4")
+                    .setDescription(
+                        "Quarto jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador5")
+                    .setDescription(
+                        "Quinto jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador6")
+                    .setDescription(
+                        "Sexto jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador7")
+                    .setDescription(
+                        "Sétimo jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador8")
+                    .setDescription(
+                        "Oitavo jogador"
+                    )
+                    .setRequired(false)
+        )
+
+        .addStringOption(
+            option =>
+                option
+                    .setName("id")
+                    .setDescription(
+                        "ID da sala"
+                    )
+                    .setRequired(true)
+        )
+
+        .addStringOption(
+            option =>
+                option
+                    .setName("senha")
+                    .setDescription(
+                        "Senha da sala"
+                    )
+                    .setRequired(true)
         )
 ];
 
@@ -554,7 +753,7 @@ async function registerCommands() {
     try {
 
         console.log(
-            "Registrando comandos..."
+            "🔄 Registrando comandos..."
         );
 
         await rest.put(
@@ -574,7 +773,7 @@ async function registerCommands() {
         );
 
         console.log(
-            "Comandos registrados!"
+            "✅ Comandos registrados!"
         );
 
     } catch (error) {
@@ -607,7 +806,10 @@ client.on(
                 const userId =
                     interaction.user.id;
 
+                // ==================================================
                 // ENTRAR
+                // ==================================================
+
                 if (
                     interaction.customId ===
                     "queue_join"
@@ -629,8 +831,7 @@ client.on(
                     }
 
                     const maxPlayers =
-                        config.queue?.maxPlayers ||
-                        10;
+                        getMaxPlayers();
 
                     if (
                         db.queue.length >=
@@ -650,6 +851,10 @@ client.on(
                         userId
                     );
 
+                    getPlayer(
+                        userId
+                    );
+
                     saveDatabase();
 
                     await interaction.reply({
@@ -659,7 +864,7 @@ client.on(
                                 db.queue.indexOf(
                                     userId
                                 ) + 1
-                            }`,
+                            }/${maxPlayers}`,
 
                         flags: 64
                     });
@@ -668,15 +873,14 @@ client.on(
                         interaction.channel
                     );
 
+                                        // Criar partida quando chegar a 8
                     if (
                         db.queue.length >=
                         maxPlayers
                     ) {
 
                         await createMatch(
-
                             interaction.guild,
-
                             interaction.channel
                         );
                     }
@@ -684,7 +888,10 @@ client.on(
                     return;
                 }
 
+                // ==================================================
                 // SAIR
+                // ==================================================
+
                 if (
                     interaction.customId ===
                     "queue_leave"
@@ -700,10 +907,8 @@ client.on(
                     ) {
 
                         return interaction.reply({
-
                             content:
                                 "❌ Você não está na fila.",
-
                             flags: 64
                         });
                     }
@@ -716,10 +921,8 @@ client.on(
                     saveDatabase();
 
                     await interaction.reply({
-
                         content:
                             "✅ Você saiu da fila.",
-
                         flags: 64
                     });
 
@@ -730,7 +933,10 @@ client.on(
                     return;
                 }
 
+                // ==================================================
                 // VER FILA
+                // ==================================================
+
                 if (
                     interaction.customId ===
                     "queue_view"
@@ -775,10 +981,8 @@ client.on(
                 ) {
 
                     return interaction.reply({
-
                         content:
                             "❌ Apenas a Staff pode usar este comando.",
-
                         flags: 64
                     });
                 }
@@ -799,7 +1003,6 @@ client.on(
                 });
 
                 return interaction.editReply({
-
                     content:
                         "✅ Painel criado."
                 });
@@ -838,10 +1041,8 @@ client.on(
                 ) {
 
                     return interaction.reply({
-
                         content:
                             "❌ Apenas a Staff pode usar este comando.",
-
                         flags: 64
                     });
                 }
@@ -859,7 +1060,6 @@ client.on(
                 );
 
                 return interaction.editReply({
-
                     content:
                         "🧹 Fila limpa com sucesso."
                 });
@@ -874,7 +1074,7 @@ client.on(
                 "resultado"
             ) {
 
-                                if (
+                if (
                     !isStaff(
                         interaction.member
                     )
@@ -887,31 +1087,411 @@ client.on(
                     });
                 }
 
-                const resultado =
-                    interaction.options.getString("resultado");
+                const partida =
+                    interaction.options.getInteger(
+                        "partida"
+                    );
 
-                if (!resultado) {
+                const vencedor =
+                    interaction.options.getString(
+                        "vencedor"
+                    );
+
+                const match =
+                    db.matches.find(
+                        m =>
+                            m.id ===
+                            partida
+                    );
+
+                if (!match) {
 
                     return interaction.reply({
                         content:
-                            "❌ Informe o resultado.",
+                            "❌ Essa partida não existe.",
                         flags: 64
                     });
                 }
 
+                if (
+                    match.status ===
+                    "finished"
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ O resultado dessa partida já foi registrado.",
+                        flags: 64
+                    });
+                }
+
+                const winners =
+                    vencedor === "A"
+                        ? match.teamA
+                        : match.teamB;
+
+                const losers =
+                    vencedor === "A"
+                        ? match.teamB
+                        : match.teamA;
+
+                winners.forEach(
+                    id => {
+
+                        const player =
+                            getPlayer(id);
+
+                        player.wins++;
+                        player.points += 3;
+                    }
+                );
+
+                losers.forEach(
+                    id => {
+
+                        const player =
+                            getPlayer(id);
+
+                        player.losses++;
+                    }
+                );
+
+                match.status =
+                    "finished";
+
+                match.winner =
+                    vencedor;
+
+                match.finishedAt =
+                    new Date().toISOString();
+
+                saveDatabase();
+
                 const embed =
                     new EmbedBuilder()
-                        .setTitle("🏆 RESULTADO")
-                        .setDescription(
-                            `📊 **Resultado da partida:**\n\n${resultado}`
+                        .setTitle(
+                            "🏆 RESULTADO"
                         )
-                        .setColor(0x00ff00)
+                        .setDescription(
+                            `Partida **#${partida}** finalizada.`
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "🏆 Vencedor",
+                                value:
+                                    vencedor === "A"
+                                        ? "🔵 Time A"
+                                        : "🔴 Time B"
+                            },
+                            {
+                                name:
+                                    "🔵 Time A",
+                                value:
+                                    createPlayerList(
+                                        match.teamA
+                                    )
+                            },
+                            {
+                                name:
+                                    "🔴 Time B",
+                                value:
+                                    createPlayerList(
+                                        match.teamB
+                                    )
+                            }
+                        )
                         .setTimestamp();
 
                 return interaction.reply({
-                    embeds: [embed]
+                    embeds: [
+                        embed
+                    ]
                 });
             }
+
+            // ==================================================
+            // RANKING
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "ranking"
+            ) {
+
+                const players =
+                    Object.values(
+                        db.players
+                    );
+
+                if (
+                    players.length ===
+                    0
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "📊 Ainda não existem jogadores no ranking.",
+                        flags: 64
+                    });
+                }
+
+                players.sort(
+                    (a, b) =>
+                        b.points -
+                        a.points
+                );
+
+                const top =
+                    players
+                        .slice(0, 10)
+                        .map(
+                            (player, index) =>
+                                `**${index + 1}.** <@${player.id}> — **${player.points} pts** | ${player.wins}W / ${player.losses}L`
+                        )
+                        .join("\n");
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🏆 RANKING"
+                        )
+                        .setDescription(
+                            top
+                        )
+                        .setFooter({
+                            text:
+                                "Top 10 jogadores"
+                        });
+
+                return interaction.reply({
+                    embeds: [
+                        embed
+                    ]
+                });
+            }
+
+            // ==================================================
+            // PERFIL
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "perfil"
+            ) {
+
+                const user =
+                    interaction.options.getUser(
+                        "jogador"
+                    ) ||
+                    interaction.user;
+
+                const player =
+                    getPlayer(
+                        user.id
+                    );
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            `👤 PERFIL DE ${user.username}`
+                        )
+                        .setThumbnail(
+                            user.displayAvatarURL()
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "🏆 Vitórias",
+                                value:
+                                    `${player.wins}`,
+                                inline: true
+                            },
+                            {
+                                name:
+                                    "❌ Derrotas",
+                                value:
+                                    `${player.losses}`,
+                                inline: true
+                            },
+                            {
+                                name:
+                                    "⭐ Pontos",
+                                value:
+                                    `${player.points}`,
+                                inline: true
+                            },
+                            {
+                                name:
+                                    "🎮 Partidas",
+                                value:
+                                    `${player.matches}`,
+                                inline: true
+                            }
+                        );
+
+                return interaction.reply({
+                    embeds: [
+                        embed
+                    ]
+                });
+            }
+
+            // ==================================================
+            // SALA
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "sala"
+            ) {
+
+                if (
+                    !isStaff(
+                        interaction.member
+                    )
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ Apenas a Staff pode usar este comando.",
+                        flags: 64
+                    });
+                }
+
+                const jogadores = [];
+
+                for (
+                    let i = 1;
+                    i <= 8;
+                    i++
+                ) {
+
+                    const jogador =
+                        interaction.options.getUser(
+                            `jogador${i}`
+                        );
+
+                    if (jogador) {
+                        jogadores.push(
+                            jogador
+                        );
+                    }
+                }
+
+                if (
+                    jogadores.length <
+                    2
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ É necessário escolher pelo menos 2 jogadores.",
+                        flags: 64
+                    });
+                }
+
+                const ids =
+                    jogadores.map(
+                        jogador =>
+                            jogador.id
+                    );
+
+                const idsUnicos =
+                    new Set(ids);
+
+                if (
+                    idsUnicos.size !==
+                    ids.length
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ Não podes escolher o mesmo jogador mais de uma vez.",
+                        flags: 64
+                    });
+                }
+
+                const idSala =
+                    interaction.options.getString(
+                        "id"
+                    );
+
+                const senha =
+                    interaction.options.getString(
+                        "senha"
+                    );
+
+                const mensagemSala =
+                    [
+                        "🎮 **SALA DA PARTIDA**",
+                        "",
+                        `👥 **Jogadores:** ${jogadores.length}`,
+                        `🆔 **ID:** \`${idSala}\``,
+                        `🔐 **Senha:** \`${senha}\``,
+                        "",
+                        "⚠️ Não compartilhe o ID e a senha.",
+                        "",
+                        "🔥 Boa partida!"
+                    ].join("\n");
+
+                await interaction.deferReply({
+                    flags: 64
+                });
+
+                const enviados = [];
+                const falharam = [];
+
+                for (
+                    const jogador of jogadores
+                ) {
+
+                    try {
+
+                        await jogador.send(
+                            mensagemSala
+                        );
+
+                        enviados.push(
+                            jogador
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            `❌ Não foi possível enviar DM para ${jogador.tag}:`,
+                            error
+                        );
+
+                        falharam.push(
+                            jogador
+                        );
+                    }
+                }
+
+                let resposta =
+                    `✅ **Sala enviada!**\n\n📩 Dados enviados para **${enviados.length}/${jogadores.length}** jogadores.`;
+
+                if (
+                    falharam.length >
+                    0
+                ) {
+
+                    resposta +=
+                        `\n\n⚠️ Não foi possível enviar DM para: ${falharam.map(j => j.tag).join(", ")}.`;
+                }
+
+                return interaction.editReply({
+                    content:
+                        resposta
+                });
+            }
+
+            return interaction.reply({
+                content:
+                    "❌ Comando não reconhecido.",
+                flags: 64
+            });
 
         } catch (error) {
 
@@ -920,32 +1500,41 @@ client.on(
                 error
             );
 
-            if (
-                interaction.replied ||
-                interaction.deferred
-            ) {
+            try {
 
-                return interaction.editReply({
-                    content:
-                        "❌ Ocorreu um erro ao executar este comando."
-                });
+                if (
+                    interaction.replied ||
+                    interaction.deferred
+                ) {
 
-            } else {
+                    await interaction.editReply({
+                        content:
+                            "❌ Ocorreu um erro ao executar este comando."
+                    });
 
-                return interaction.reply({
-                    content:
-                        "❌ Ocorreu um erro ao executar este comando.",
-                    flags: 64
-                });
+                } else {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Ocorreu um erro ao executar este comando.",
+                        flags: 64
+                    });
+                }
+
+            } catch (replyError) {
+
+                console.error(
+                    "❌ Não foi possível responder à interação:",
+                    replyError
+                );
             }
         }
     }
 );
 
-
-// ==================================================
+// ======================================================
 // BOT ONLINE
-// ==================================================
+// ======================================================
 
 client.once(
     "ready",
@@ -957,28 +1546,51 @@ client.once(
 
         try {
 
-            await client.application.commands.set(
-                commands
-            );
+            await registerCommands();
 
             console.log(
-                "✅ Comandos registrados com sucesso!"
+                "🚀 Sistema iniciado com sucesso!"
             );
 
         } catch (error) {
 
             console.error(
-                "❌ Erro ao registrar comandos:",
+                "❌ Erro durante inicialização:",
                 error
             );
         }
     }
 );
 
+// ======================================================
+// ERROS GERAIS
+// ======================================================
 
-// ==================================================
+process.on(
+    "unhandledRejection",
+    error => {
+
+        console.error(
+            "❌ Unhandled Rejection:",
+            error
+        );
+    }
+);
+
+process.on(
+    "uncaughtException",
+    error => {
+
+        console.error(
+            "❌ Uncaught Exception:",
+            error
+        );
+    }
+);
+
+// ======================================================
 // LOGIN
-// ==================================================
+// ======================================================
 
 client.login(
     config.token
