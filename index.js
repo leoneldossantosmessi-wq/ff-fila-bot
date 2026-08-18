@@ -626,25 +626,117 @@ const commands = [
                     .setRequired(false)
         ),
 
-    // ==================================================
-    // SALA
-    // ==================================================
+   // ==================================================
+// SALA
+// ==================================================
 
-    new SlashCommandBuilder()
-        .setName("sala")
-        .setDescription(
-            "Envia o ID e senha da sala para os jogadores escolhidos."
-        )
+new SlashCommandBuilder()
+    .setName("sala")
+    .setDescription(
+        "Envia o ID e senha da sala para os jogadores escolhidos."
+    )
 
-        .addUserOption(
-            option =>
-                option
-                    .setName("jogador1")
-                    .setDescription(
-                        "Primeiro jogador"
-                    )
-                    .setRequired(true)
-        )
+    // OBRIGATÓRIOS PRIMEIRO
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador1")
+                .setDescription(
+                    "Primeiro jogador"
+                )
+                .setRequired(true)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador2")
+                .setDescription(
+                    "Segundo jogador"
+                )
+                .setRequired(true)
+    )
+
+    .addStringOption(
+        option =>
+            option
+                .setName("id")
+                .setDescription(
+                    "ID da sala"
+                )
+                .setRequired(true)
+    )
+
+    .addStringOption(
+        option =>
+            option
+                .setName("senha")
+                .setDescription(
+                    "Senha da sala"
+                )
+                .setRequired(true)
+    )
+
+    // OPCIONAIS DEPOIS
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador3")
+                .setDescription(
+                    "Terceiro jogador"
+                )
+                .setRequired(false)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador4")
+                .setDescription(
+                    "Quarto jogador"
+                )
+                .setRequired(false)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador5")
+                .setDescription(
+                    "Quinto jogador"
+                )
+                .setRequired(false)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador6")
+                .setDescription(
+                    "Sexto jogador"
+                )
+                .setRequired(false)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador7")
+                .setDescription(
+                    "Sétimo jogador"
+                )
+                .setRequired(false)
+    )
+
+    .addUserOption(
+        option =>
+            option
+                .setName("jogador8")
+                .setDescription(
+                    "Oitavo jogador"
+                )
+                .setRequired(false)
+), 
 
         .addUserOption(
             option =>
