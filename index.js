@@ -1601,7 +1601,40 @@ client.once(
         }
     }
 );
+// ======================================================
+// MONITOR DE CONEXÃO DO DISCORD
+// ======================================================
 
+client.on(
+    "shardDisconnect",
+    (event, shardId) => {
+
+        console.error(
+            `🔴 Discord desconectou o bot. Shard: ${shardId}`,
+            event
+        );
+    }
+);
+
+client.on(
+    "shardReconnecting",
+    shardId => {
+
+        console.log(
+            `🔄 Tentando reconectar ao Discord... Shard: ${shardId}`
+        );
+    }
+);
+
+client.on(
+    "shardResume",
+    (replayed, shardId) => {
+
+        console.log(
+            `🟢 Bot reconectado ao Discord. Shard: ${shardId}`
+        );
+    }
+);
 // ======================================================
 // ERROS GERAIS
 // ======================================================
