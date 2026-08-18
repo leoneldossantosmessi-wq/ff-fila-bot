@@ -15,11 +15,11 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 
-// ======================================================
-// CONFIGURAÇÃO
-// ======================================================
-
 const config = require("./config.json");
+
+// ======================================================
+// CONFIGURAÇÕES
+// ======================================================
 
 config.token = process.env.TOKEN || config.token;
 config.clientId = process.env.CLIENT_ID || config.clientId;
@@ -39,25 +39,6 @@ if (!config.guildId) {
     console.error("❌ GUILD_ID não configurado.");
     process.exit(1);
 }
-
-if (!config.queue) {
-    console.error("❌ A configuração 'queue' não existe no config.json.");
-    process.exit(1);
-}
-
-if (!config.queue.maxPlayers) {
-    console.error("❌ queue.maxPlayers não está configurado.");
-    process.exit(1);
-}
-
-if (!config.queue.playersPerTeam) {
-    console.error("❌ queue.playersPerTeam não está configurado.");
-    process.exit(1);
-}
-
-// ======================================================
-// CLIENT DISCORD
-// ======================================================
 
 const client = new Client({
     intents: [
@@ -82,16 +63,12 @@ if (!fs.existsSync(dataDir)) {
 if (!fs.existsSync(databaseFile)) {
     fs.writeFileSync(
         databaseFile,
-        JSON.stringify(
-            {
-                players: {},
-                queue: [],
-                matches: [],
-                matchCounter: 0
-            },
-            null,
-            2
-        )
+        JSON.stringify({
+            players: {},
+            queue: [],
+            matches: [],
+            matchCounter: 0
+        }, null, 2)
     );
 }
 
@@ -102,33 +79,31 @@ try {
         fs.readFileSync(databaseFile, "utf8")
     );
 } catch (error) {
+
     console.error(
         "❌ Erro ao ler database.json:",
         error
     );
 
-    process.exit(1);
+    db = {
+        players: {},
+        queue: [],
+        matches: [],
+        matchCounter: 0
+    };
+
+    fs.writeFileSync(
+        databaseFile,
+        JSON.stringify(db, null, 2)
+    );
 }
 
-// Garantir estrutura do banco
-
-db.players ??= {};
-db.queue ??= [];
-db.matches ??= [];
-db.matchCounter ??= 0;
-
 function saveDatabase() {
-    try {
-        fs.writeFileSync(
-            databaseFile,
-            JSON.stringify(db, null, 2)
-        );
-    } catch (error) {
-        console.error(
-            "❌ Erro ao salvar banco de dados:",
-            error
-        );
-    }
+
+    fs.writeFileSync(
+        databaseFile,
+        JSON.stringify(db, null, 2)
+    );
 }
 
 // ======================================================
@@ -141,33 +116,19 @@ function isStaff(member) {
         return false;
     }
 
-    try {
-
-        return (
-            member.permissions.has(
-                PermissionsBitField.Flags.Administrator
-            ) ||
-            (
-                config.roles &&
-                config.roles.staff &&
-                member.roles.cache.has(
-                    config.roles.staff
-                )
+    return (
+        member.permissions.has(
+            PermissionsBitField.Flags.Administrator
+        ) ||
+        (
+            config.roles &&
+            config.roles.staff &&
+            member.roles.cache.has(
+                config.roles.staff
             )
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Erro ao verificar Staff:",
-            error
-        );
-
-        return false;
-    }
+        )
+    );
 }
-
-// ------------------------------------------------------
 
 function getPlayer(userId) {
 
@@ -187,8 +148,6 @@ function getPlayer(userId) {
     return db.players[userId];
 }
 
-// ------------------------------------------------------
-
 function createPlayerList(ids) {
 
     if (!ids || ids.length === 0) {
@@ -203,11 +162,12 @@ function createPlayerList(ids) {
         .join("\n");
 }
 
-// ------------------------------------------------------
-
 function createQueueEmbed() {
 
-    const queue = db.queue;
+    const queue = db.queue || [];
+
+    const maxPlayers =
+        config.queue?.maxPlayers || 10;
 
     return new EmbedBuilder()
         .setTitle("🎮 FILA DE APOSTADOS")
@@ -218,7 +178,7 @@ function createQueueEmbed() {
             {
                 name: "👥 Jogadores",
                 value:
-                    `${queue.length}/${config.queue.maxPlayers}`,
+                    `${queue.length}/${maxPlayers}`,
                 inline: true
             },
             {
@@ -233,8 +193,6 @@ function createQueueEmbed() {
                 "ORG Free Fire • Sistema de Filas"
         });
 }
-
-// ------------------------------------------------------
 
 function createQueueButtons() {
 
@@ -273,11 +231,11 @@ function createQueueButtons() {
 
 async function updateQueuePanel(channel) {
 
-    try {
+    if (!channel) {
+        return;
+    }
 
-        if (!channel) {
-            return;
-        }
+    try {
 
         const messages =
             await channel.messages.fetch({
@@ -308,8 +266,8 @@ async function updateQueuePanel(channel) {
     } catch (error) {
 
         console.error(
-            "⚠️ Não foi possível atualizar o painel:",
-            error.message
+            "❌ Erro ao atualizar painel:",
+            error
         );
     }
 }
@@ -323,127 +281,142 @@ async function createMatch(
     channel
 ) {
 
-    try {
+    const maxPlayers =
+        config.queue?.maxPlayers || 10;
 
-        if (
-            db.queue.length <
-            config.queue.maxPlayers
-        ) {
-            return;
-        }
+    const playersPerTeam =
+        config.queue?.playersPerTeam ||
+        Math.floor(maxPlayers / 2);
 
-        const players =
-            [...db.queue];
+    if (
+        db.queue.length <
+        maxPlayers
+    ) {
+        return;
+    }
 
-        db.queue = [];
+    const players =
+        [...db.queue];
 
-        db.matchCounter++;
+    db.queue = [];
 
-        const matchId =
-            db.matchCounter;
+    db.matchCounter++;
 
-        const shuffled =
-            [...players].sort(
-                () =>
-                    Math.random() - 0.5
-            );
+    const matchId =
+        db.matchCounter;
 
-        const teamA =
-            shuffled.slice(
-                0,
-                config.queue.playersPerTeam
-            );
+    const shuffled =
+        [...players].sort(
+            () => Math.random() - 0.5
+        );
 
-        const teamB =
-            shuffled.slice(
-                config.queue.playersPerTeam,
-                config.queue.maxPlayers
-            );
+    const teamA =
+        shuffled.slice(
+            0,
+            playersPerTeam
+        );
 
-        const match = {
-            id: matchId,
-            players,
-            teamA,
-            teamB,
-            status: "waiting",
-            winner: null,
-            createdAt:
-                new Date().toISOString()
-        };
+    const teamB =
+        shuffled.slice(
+            playersPerTeam,
+            maxPlayers
+        );
 
-        db.matches.push(match);
+    const match = {
 
-        players.forEach(id => {
+        id: matchId,
 
-            const player =
-                getPlayer(id);
+        players: players,
 
-            player.matches++;
-        });
+        teamA: teamA,
 
-        saveDatabase();
+        teamB: teamB,
 
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    `🔥 PARTIDA #${matchId}`
+        status: "waiting",
+
+        winner: null,
+
+        createdAt:
+            new Date().toISOString()
+    };
+
+    db.matches.push(match);
+
+    players.forEach(id => {
+
+        const player =
+            getPlayer(id);
+
+        player.matches++;
+    });
+
+    saveDatabase();
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `🔥 PARTIDA #${matchId}`
+            )
+            .setDescription(
+                "A fila está completa! Uma nova partida foi criada."
+            )
+            .addFields(
+                {
+                    name: "🔵 TIME A",
+                    value:
+                        createPlayerList(
+                            teamA
+                        )
+                },
+                {
+                    name: "🔴 TIME B",
+                    value:
+                        createPlayerList(
+                            teamB
+                        )
+                },
+                {
+                    name: "📊 Status",
+                    value:
+                        "Aguardando resultado"
+                }
+            )
+            .setFooter({
+                text:
+                    "Boa partida!"
+            });
+
+    await channel.send({
+
+        content:
+            players
+                .map(
+                    id => `<@${id}>`
                 )
-                .setDescription(
-                    "A fila está completa! Uma nova partida foi criada."
-                )
-                .addFields(
-                    {
-                        name: "🔵 TIME A",
-                        value:
-                            createPlayerList(
-                                teamA
-                            )
-                    },
-                    {
-                        name: "🔴 TIME B",
-                        value:
-                            createPlayerList(
-                                teamB
-                            )
-                    },
-                    {
-                        name: "📊 Status",
-                        value:
-                            "Aguardando resultado"
-                    }
-                )
-                .setFooter({
-                    text:
-                        "Boa partida!"
-                });
+                .join(" "),
 
-        await channel.send({
-            content:
-                players
-                    .map(
-                        id => `<@${id}>`
-                    )
-                    .join(" "),
-            embeds: [
-                embed
-            ]
-        });
+        embeds: [
+            embed
+        ]
+    });
 
-        // LOGS
+    if (
+        guild &&
+        config.channels &&
+        config.channels.logs
+    ) {
 
         const logsChannel =
-            guild &&
-            config.channels &&
-            config.channels.logs
-                ? guild.channels.cache.get(
-                    config.channels.logs
-                )
-                : null;
+            guild.channels.cache.get(
+                config.channels.logs
+            );
 
         if (logsChannel) {
 
             await logsChannel.send({
+
                 embeds: [
+
                     new EmbedBuilder()
                         .setTitle(
                             "📝 Nova partida"
@@ -454,7 +427,7 @@ async function createMatch(
                         .addFields(
                             {
                                 name:
-                                    "🔵 Time A",
+                                    "Time A",
                                 value:
                                     createPlayerList(
                                         teamA
@@ -462,7 +435,7 @@ async function createMatch(
                             },
                             {
                                 name:
-                                    "🔴 Time B",
+                                    "Time B",
                                 value:
                                     createPlayerList(
                                         teamB
@@ -470,27 +443,13 @@ async function createMatch(
                             }
                         )
                 ]
-            }).catch(error => {
-
-                console.error(
-                    "⚠️ Erro ao enviar log:",
-                    error.message
-                );
-
             });
         }
-
-        await updateQueuePanel(
-            channel
-        );
-
-    } catch (error) {
-
-        console.error(
-            "❌ Erro ao criar partida:",
-            error
-        );
     }
+
+    await updateQueuePanel(
+        channel
+    );
 }
 
 // ======================================================
@@ -528,31 +487,33 @@ const commands = [
         .setDescription(
             "Registra o resultado de uma partida"
         )
-        .addIntegerOption(option =>
-            option
-                .setName("partida")
-                .setDescription(
-                    "Número da partida"
-                )
-                .setRequired(true)
+        .addIntegerOption(
+            option =>
+                option
+                    .setName("partida")
+                    .setDescription(
+                        "Número da partida"
+                    )
+                    .setRequired(true)
         )
-        .addStringOption(option =>
-            option
-                .setName("vencedor")
-                .setDescription(
-                    "Time vencedor"
-                )
-                .setRequired(true)
-                .addChoices(
-                    {
-                        name: "Time A",
-                        value: "A"
-                    },
-                    {
-                        name: "Time B",
-                        value: "B"
-                    }
-                )
+        .addStringOption(
+            option =>
+                option
+                    .setName("vencedor")
+                    .setDescription(
+                        "Time vencedor"
+                    )
+                    .setRequired(true)
+                    .addChoices(
+                        {
+                            name: "Time A",
+                            value: "A"
+                        },
+                        {
+                            name: "Time B",
+                            value: "B"
+                        }
+                    )
         ),
 
     new SlashCommandBuilder()
@@ -566,13 +527,14 @@ const commands = [
         .setDescription(
             "Mostra o perfil de um jogador"
         )
-        .addUserOption(option =>
-            option
-                .setName("jogador")
-                .setDescription(
-                    "Jogador"
-                )
-                .setRequired(false)
+        .addUserOption(
+            option =>
+                option
+                    .setName("jogador")
+                    .setDescription(
+                        "Jogador"
+                    )
+                    .setRequired(false)
         )
 ];
 
@@ -592,14 +554,16 @@ async function registerCommands() {
     try {
 
         console.log(
-            "🔄 Registrando comandos..."
+            "Registrando comandos..."
         );
 
         await rest.put(
+
             Routes.applicationGuildCommands(
                 config.clientId,
                 config.guildId
             ),
+
             {
                 body:
                     commands.map(
@@ -610,13 +574,13 @@ async function registerCommands() {
         );
 
         console.log(
-            "✅ Comandos registrados!"
+            "Comandos registrados!"
         );
 
     } catch (error) {
 
         console.error(
-            "❌ Erro ao registrar comandos:",
+            "❌ ERRO AO REGISTRAR COMANDOS:",
             error
         );
     }
@@ -643,10 +607,7 @@ client.on(
                 const userId =
                     interaction.user.id;
 
-                // ------------------------------------------
                 // ENTRAR
-                // ------------------------------------------
-
                 if (
                     interaction.customId ===
                     "queue_join"
@@ -659,20 +620,28 @@ client.on(
                     ) {
 
                         return interaction.reply({
+
                             content:
                                 "❌ Você já está na fila.",
+
                             flags: 64
                         });
                     }
 
+                    const maxPlayers =
+                        config.queue?.maxPlayers ||
+                        10;
+
                     if (
                         db.queue.length >=
-                        config.queue.maxPlayers
+                        maxPlayers
                     ) {
 
                         return interaction.reply({
+
                             content:
                                 "❌ A fila está cheia.",
+
                             flags: 64
                         });
                     }
@@ -683,30 +652,31 @@ client.on(
 
                     saveDatabase();
 
-                    const position =
-                        db.queue.indexOf(
-                            userId
-                        ) + 1;
-
-                    // Responder imediatamente
                     await interaction.reply({
+
                         content:
-                            `✅ Você entrou na fila!\n📍 Posição: ${position}`,
+                            `✅ Você entrou na fila!\n📍 Posição: ${
+                                db.queue.indexOf(
+                                    userId
+                                ) + 1
+                            }`,
+
                         flags: 64
                     });
 
-                    // Atualizações não devem derrubar a interação
                     await updateQueuePanel(
                         interaction.channel
                     );
 
                     if (
                         db.queue.length >=
-                        config.queue.maxPlayers
+                        maxPlayers
                     ) {
 
                         await createMatch(
+
                             interaction.guild,
+
                             interaction.channel
                         );
                     }
@@ -714,10 +684,7 @@ client.on(
                     return;
                 }
 
-                // ------------------------------------------
                 // SAIR
-                // ------------------------------------------
-
                 if (
                     interaction.customId ===
                     "queue_leave"
@@ -733,8 +700,10 @@ client.on(
                     ) {
 
                         return interaction.reply({
+
                             content:
                                 "❌ Você não está na fila.",
+
                             flags: 64
                         });
                     }
@@ -747,8 +716,10 @@ client.on(
                     saveDatabase();
 
                     await interaction.reply({
+
                         content:
                             "✅ Você saiu da fila.",
+
                         flags: 64
                     });
 
@@ -759,19 +730,18 @@ client.on(
                     return;
                 }
 
-                // ------------------------------------------
                 // VER FILA
-                // ------------------------------------------
-
                 if (
                     interaction.customId ===
                     "queue_view"
                 ) {
 
                     return interaction.reply({
+
                         embeds: [
                             createQueueEmbed()
                         ],
+
                         flags: 64
                     });
                 }
@@ -805,25 +775,211 @@ client.on(
                 ) {
 
                     return interaction.reply({
+
                         content:
                             "❌ Apenas a Staff pode usar este comando.",
+
                         flags: 64
                     });
                 }
 
-                // Responde imediatamente à interação
                 await interaction.deferReply({
                     flags: 64
                 });
 
                 await interaction.channel.send({
+
                     embeds: [
                         createQueueEmbed()
                     ],
+
                     components: [
                         createQueueButtons()
                     ]
                 });
 
                 return interaction.editReply({
+
                     content:
+                        "✅ Painel criado."
+                });
+            }
+
+            // ==================================================
+            // FILA
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "fila"
+            ) {
+
+                return interaction.reply({
+
+                    embeds: [
+                        createQueueEmbed()
+                    ]
+                });
+            }
+
+            // ==================================================
+            // LIMPAR FILA
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "limparfila"
+            ) {
+
+                if (
+                    !isStaff(
+                        interaction.member
+                    )
+                ) {
+
+                    return interaction.reply({
+
+                        content:
+                            "❌ Apenas a Staff pode usar este comando.",
+
+                        flags: 64
+                    });
+                }
+
+                await interaction.deferReply({
+                    flags: 64
+                });
+
+                db.queue = [];
+
+                saveDatabase();
+
+                await updateQueuePanel(
+                    interaction.channel
+                );
+
+                return interaction.editReply({
+
+                    content:
+                        "🧹 Fila limpa com sucesso."
+                });
+            }
+
+            // ==================================================
+            // RESULTADO
+            // ==================================================
+
+            if (
+                interaction.commandName ===
+                "resultado"
+            ) {
+
+                                if (
+                    !isStaff(
+                        interaction.member
+                    )
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ Apenas a Staff pode usar este comando.",
+                        flags: 64
+                    });
+                }
+
+                const resultado =
+                    interaction.options.getString("resultado");
+
+                if (!resultado) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ Informe o resultado.",
+                        flags: 64
+                    });
+                }
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle("🏆 RESULTADO")
+                        .setDescription(
+                            `📊 **Resultado da partida:**\n\n${resultado}`
+                        )
+                        .setColor(0x00ff00)
+                        .setTimestamp();
+
+                return interaction.reply({
+                    embeds: [embed]
+                });
+            }
+
+        } catch (error) {
+
+            console.error(
+                "❌ ERRO NA INTERAÇÃO:",
+                error
+            );
+
+            if (
+                interaction.replied ||
+                interaction.deferred
+            ) {
+
+                return interaction.editReply({
+                    content:
+                        "❌ Ocorreu um erro ao executar este comando."
+                });
+
+            } else {
+
+                return interaction.reply({
+                    content:
+                        "❌ Ocorreu um erro ao executar este comando.",
+                    flags: 64
+                });
+            }
+        }
+    }
+);
+
+
+// ==================================================
+// BOT ONLINE
+// ==================================================
+
+client.once(
+    "ready",
+    async () => {
+
+        console.log(
+            `🤖 Bot online como ${client.user.tag}`
+        );
+
+        try {
+
+            await client.application.commands.set(
+                commands
+            );
+
+            console.log(
+                "✅ Comandos registrados com sucesso!"
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Erro ao registrar comandos:",
+                error
+            );
+        }
+    }
+);
+
+
+// ==================================================
+// LOGIN
+// ==================================================
+
+client.login(
+    config.token
+);
