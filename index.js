@@ -1049,7 +1049,6 @@ client.once("ready", async () => {
 // SERVIDOR HTTP PARA O RENDER
 // ======================================================
 
-const http = require("http");
 
 const PORT = process.env.PORT || 3000;
 
