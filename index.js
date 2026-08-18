@@ -914,165 +914,117 @@ client.on(
                 });
             }
 
+// ==================================================
+// RANKING
+// ==================================================
 
-            // ==================================================
-            // RANKING
-            // ==================================================
+if (interaction.commandName === "ranking") {
 
-            if (
-                interaction.commandName ===
-                "ranking"
-            ) {
+    const ranking = Object.values(db.players)
+        .sort((a, b) => b.points - a.points);
 
-                const ranking =
-                    Object.values(
-                        db.players
-                    ).sort(
-                        (a, b) =>
-                            b.points -
-                            a.points
-                    );
+    if (ranking.length === 0) {
 
-                if (
-                    ranking.length === 0
-                ) {
+        return interaction.reply({
+            content:
+                "📊 Ainda não existem jogadores no ranking.",
+            flags: 64
+        });
+    }
 
-                    return interaction.reply({
-                        content:
-                            "📊 Ainda não existem jogadores no ranking."
-                    });
-                }
+    const rankingText = ranking
+        .slice(0, 10)
+        .map(
+            (player, index) =>
+                `${index + 1}. <@${player.id}> — ${player.points} pontos | ${player.wins} vitórias`
+        )
+        .join("\n");
 
-                const rankingText =
-                    ranking
-                        .slice(0, 10)
-                        .map(
-                            (player, index) =>
-                                `${index + 1}. <@${player.id}> — ${player.points} pontos | ${player.wins} vitórias`
-                        )
-                        .join("\n");
+    const embed = new EmbedBuilder()
+        .setTitle("🏆 RANKING")
+        .setDescription(rankingText)
+        .setFooter({
+            text: "ORG Free Fire • Ranking"
+        });
 
-                const embed =
-                    new EmbedBuilder()
-                        .setTitle(
-                            "🏆 RANKING"
-                        )
-                        .setDescription(
-                            rankingText
-                        )
-                        .setFooter({
-                            text:
-                                "ORG Free Fire • Ranking"
-                        });
+    return interaction.reply({
+        embeds: [embed]
+    });
+}
 
-                return interaction.reply({
-                    embeds: [
-                        embed
-                    ]
-                });
+
+// ==================================================
+// PERFIL
+// ==================================================
+
+if (interaction.commandName === "perfil") {
+
+    const user =
+        interaction.options.getUser("jogador") ||
+        interaction.user;
+
+    const player = getPlayer(user.id);
+
+    const embed = new EmbedBuilder()
+        .setTitle(`👤 PERFIL — ${user.username}`)
+        .setThumbnail(user.displayAvatarURL())
+        .addFields(
+            {
+                name: "🏆 Vitórias",
+                value: `${player.wins}`,
+                inline: true
+            },
+            {
+                name: "❌ Derrotas",
+                value: `${player.losses}`,
+                inline: true
+            },
+            {
+                name: "⭐ Pontos",
+                value: `${player.points}`,
+                inline: true
+            },
+            {
+                name: "🎮 Partidas",
+                value: `${player.matches}`,
+                inline: true
             }
+        );
+
+    return interaction.reply({
+        embeds: [embed]
+    });
+}
 
 
-            // ==================================================
-            // PERFIL
-            // ==================================================
-
-            if (
-                interaction.commandName ===
-                "perfil"
-            ) {
-
-                const user =
-                    interaction.options.getUser(
-                        "jogador"
-                    ) ||
-                    interaction.user;
-
-                const player =
-                    getPlayer(
-                        user.id
-                    );
-
-                const embed =
-                    new EmbedBuilder()
-                        .setTitle(
-                            `👤 PERFIL — ${user.username}`
-                        )
-                        .setThumbnail(
-                            user.displayAvatarURL()
-                        )
-                        .addFields(
-                            {
-                                name:
-                                    "🏆 Vitórias",
-                                value:
-                                    `${player.wins}`,
-                                inline: true
-                            },
-                            {
-                                name:
-                                    "❌ Derrotas",
-                                value:
-                                    `${player.losses}`,
-                                inline: true
-                            },
-                            {
-                                name:
-                                    "⭐ Pontos",
-                                value:
-                                    `${player.points}`,
-                                inline: true
-                            },
-                            {
-                                name:
-                                    "🎮 Partidas",
-                                value:
-                                    `${player.matches}`,
-                                inline: true
-                            }
-                        );
-
-                return interaction.reply({
-                    embeds: [
-                        embed
-                    ]
-                });
-            }
+// ==================================================
+// ERROS
+// ==================================================
 
         } catch (error) {
 
             console.error(
-                "ERRO NA INTERAÇÃO:",
+                "ERRO NO COMANDO:",
                 error
             );
 
-            try {
+            if (
+                interaction.deferred ||
+                interaction.replied
+            ) {
 
-                if (
-                    interaction.deferred ||
-                    interaction.replied
-                ) {
+                await interaction.editReply({
+                    content:
+                        "❌ Ocorreu um erro ao executar o comando."
+                }).catch(() => {});
 
-                    await interaction.editReply({
-                        content:
-                            "❌ Ocorreu um erro ao executar o comando."
-                    });
+            } else {
 
-                } else {
-
-                    await interaction.reply({
-                        content:
-                            "❌ Ocorreu um erro ao executar o comando.",
-                        flags: 64
-                    });
-                }
-
-            } catch (replyError) {
-
-                console.error(
-                    "ERRO AO RESPONDER:",
-                    replyError
-                );
+                await interaction.reply({
+                    content:
+                        "❌ Ocorreu um erro ao executar o comando.",
+                    flags: 64
+                }).catch(() => {});
             }
         }
     }
@@ -1083,51 +1035,40 @@ client.on(
 // BOT ONLINE
 // ======================================================
 
-client.once(
-    "ready",
-    async () => {
+client.once("ready", async () => {
 
-        console.log(
-            `🤖 Bot online como ${client.user.tag}`
-        );
+    console.log(
+        `🤖 Bot online como ${client.user.tag}`
+    );
 
-        await registerCommands();
-    }
-);
+    await registerCommands();
+});
 
 
 // ======================================================
-// SERVIDOR HTTP — RENDER
+// SERVIDOR HTTP PARA O RENDER
 // ======================================================
 
-const PORT =
-    process.env.PORT || 3000;
+const http = require("http");
 
-http.createServer(
-    (req, res) => {
+const PORT = process.env.PORT || 3000;
 
-        res.writeHead(200);
+http.createServer((req, res) => {
 
-        res.end(
-            "Bot online!"
-        );
-    }
-).listen(
-    PORT,
-    "0.0.0.0",
-    () => {
+    res.writeHead(200);
+    res.end("Bot online!");
 
-        console.log(
-            `🌐 Servidor HTTP rodando na porta ${PORT}`
-        );
-    }
-);
+}).listen(PORT, "0.0.0.0", () => {
+
+    console.log(
+        `🌐 Servidor HTTP rodando na porta ${PORT}`
+    );
+});
 
 
 // ======================================================
 // LOGIN
 // ======================================================
 
-client.login(
-    config.token
-);
+client.login(config.token);
+                                            
