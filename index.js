@@ -848,6 +848,39 @@ client.on(
     db.queue.push(
         userId
     );
+// ==================================================
+// NOTIFICAÇÃO DE ENTRADA NA FILA
+// ==================================================
+
+try {
+
+    const notificationChannel =
+        await client.channels.fetch(
+            "1538169849002594354"
+        );
+
+    if (
+        notificationChannel &&
+        notificationChannel.isTextBased()
+    ) {
+
+        await notificationChannel.send({
+            content:
+                `🔔 **Nova entrada na fila!**\n` +
+                `👤 Jogador: <@${userId}>\n` +
+                `👥 Fila: **${db.queue.length}/${maxPlayers}**`
+        });
+
+    }
+
+} catch (error) {
+
+    console.error(
+        "❌ Erro ao enviar notificação da fila:",
+        error
+    );
+
+}
 
     getPlayer(
         userId
