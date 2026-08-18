@@ -15,11 +15,49 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 
+// ======================================================
+// CONFIGURAÇÃO
+// ======================================================
+
 const config = require("./config.json");
 
 config.token = process.env.TOKEN || config.token;
 config.clientId = process.env.CLIENT_ID || config.clientId;
 config.guildId = process.env.GUILD_ID || config.guildId;
+
+if (!config.token) {
+    console.error("❌ TOKEN não configurado.");
+    process.exit(1);
+}
+
+if (!config.clientId) {
+    console.error("❌ CLIENT_ID não configurado.");
+    process.exit(1);
+}
+
+if (!config.guildId) {
+    console.error("❌ GUILD_ID não configurado.");
+    process.exit(1);
+}
+
+if (!config.queue) {
+    console.error("❌ A configuração 'queue' não existe no config.json.");
+    process.exit(1);
+}
+
+if (!config.queue.maxPlayers) {
+    console.error("❌ queue.maxPlayers não está configurado.");
+    process.exit(1);
+}
+
+if (!config.queue.playersPerTeam) {
+    console.error("❌ queue.playersPerTeam não está configurado.");
+    process.exit(1);
+}
+
+// ======================================================
+// CLIENT DISCORD
+// ======================================================
 
 const client = new Client({
     intents: [
@@ -27,7 +65,6 @@ const client = new Client({
         GatewayIntentBits.GuildMembers
     ]
 });
-
 
 // ======================================================
 // BANCO DE DADOS
@@ -37,7 +74,9 @@ const dataDir = path.join(__dirname, "data");
 const databaseFile = path.join(dataDir, "database.json");
 
 if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(dataDir, {
+        recursive: true
+    });
 }
 
 if (!fs.existsSync(databaseFile)) {
@@ -56,39 +95,79 @@ if (!fs.existsSync(databaseFile)) {
     );
 }
 
-let db = JSON.parse(
-    fs.readFileSync(databaseFile, "utf8")
-);
+let db;
 
-function saveDatabase() {
-    fs.writeFileSync(
-        databaseFile,
-        JSON.stringify(db, null, 2)
+try {
+    db = JSON.parse(
+        fs.readFileSync(databaseFile, "utf8")
     );
+} catch (error) {
+    console.error(
+        "❌ Erro ao ler database.json:",
+        error
+    );
+
+    process.exit(1);
 }
 
+// Garantir estrutura do banco
+
+db.players ??= {};
+db.queue ??= [];
+db.matches ??= [];
+db.matchCounter ??= 0;
+
+function saveDatabase() {
+    try {
+        fs.writeFileSync(
+            databaseFile,
+            JSON.stringify(db, null, 2)
+        );
+    } catch (error) {
+        console.error(
+            "❌ Erro ao salvar banco de dados:",
+            error
+        );
+    }
+}
 
 // ======================================================
 // FUNÇÕES AUXILIARES
 // ======================================================
 
 function isStaff(member) {
-    if (!member) return false;
 
-    return (
-        member.permissions.has(
-            PermissionsBitField.Flags.Administrator
-        ) ||
-        (
-            config.roles &&
-            config.roles.staff &&
-            member.roles.cache.has(
-                config.roles.staff
+    if (!member) {
+        return false;
+    }
+
+    try {
+
+        return (
+            member.permissions.has(
+                PermissionsBitField.Flags.Administrator
+            ) ||
+            (
+                config.roles &&
+                config.roles.staff &&
+                member.roles.cache.has(
+                    config.roles.staff
+                )
             )
-        )
-    );
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Erro ao verificar Staff:",
+            error
+        );
+
+        return false;
+    }
 }
 
+// ------------------------------------------------------
 
 function getPlayer(userId) {
 
@@ -108,6 +187,7 @@ function getPlayer(userId) {
     return db.players[userId];
 }
 
+// ------------------------------------------------------
 
 function createPlayerList(ids) {
 
@@ -123,10 +203,11 @@ function createPlayerList(ids) {
         .join("\n");
 }
 
+// ------------------------------------------------------
 
 function createQueueEmbed() {
 
-    const queue = db.queue || [];
+    const queue = db.queue;
 
     return new EmbedBuilder()
         .setTitle("🎮 FILA DE APOSTADOS")
@@ -142,7 +223,8 @@ function createQueueEmbed() {
             },
             {
                 name: "📋 Fila atual",
-                value: createPlayerList(queue),
+                value:
+                    createPlayerList(queue),
                 inline: false
             }
         )
@@ -152,6 +234,7 @@ function createQueueEmbed() {
         });
 }
 
+// ------------------------------------------------------
 
 function createQueueButtons() {
 
@@ -162,22 +245,27 @@ function createQueueButtons() {
                 .setCustomId("queue_join")
                 .setLabel("ENTRAR NA FILA")
                 .setEmoji("🎮")
-                .setStyle(ButtonStyle.Success),
+                .setStyle(
+                    ButtonStyle.Success
+                ),
 
             new ButtonBuilder()
                 .setCustomId("queue_leave")
                 .setLabel("SAIR DA FILA")
                 .setEmoji("🚪")
-                .setStyle(ButtonStyle.Danger),
+                .setStyle(
+                    ButtonStyle.Danger
+                ),
 
             new ButtonBuilder()
                 .setCustomId("queue_view")
                 .setLabel("VER FILA")
                 .setEmoji("📋")
-                .setStyle(ButtonStyle.Primary)
+                .setStyle(
+                    ButtonStyle.Primary
+                )
         );
 }
-
 
 // ======================================================
 // ATUALIZAR PAINEL
@@ -185,146 +273,172 @@ function createQueueButtons() {
 
 async function updateQueuePanel(channel) {
 
-    if (!channel) return;
+    try {
 
-    const messages =
-        await channel.messages.fetch({
-            limit: 20
+        if (!channel) {
+            return;
+        }
+
+        const messages =
+            await channel.messages.fetch({
+                limit: 20
+            });
+
+        const panel =
+            messages.find(
+                message =>
+                    message.author.id ===
+                        client.user.id &&
+                    message.components.length > 0
+            );
+
+        if (!panel) {
+            return;
+        }
+
+        await panel.edit({
+            embeds: [
+                createQueueEmbed()
+            ],
+            components: [
+                createQueueButtons()
+            ]
         });
 
-    const panel =
-        messages.find(
-            msg =>
-                msg.author.id === client.user.id &&
-                msg.components.length > 0
+    } catch (error) {
+
+        console.error(
+            "⚠️ Não foi possível atualizar o painel:",
+            error.message
         );
-
-    if (!panel) return;
-
-    await panel.edit({
-        embeds: [
-            createQueueEmbed()
-        ],
-        components: [
-            createQueueButtons()
-        ]
-    });
+    }
 }
-
 
 // ======================================================
 // CRIAR PARTIDA
 // ======================================================
 
-async function createMatch(guild, channel) {
+async function createMatch(
+    guild,
+    channel
+) {
 
-    if (
-        db.queue.length <
-        config.queue.maxPlayers
-    ) {
-        return;
-    }
+    try {
 
-    const players = [
-        ...db.queue
-    ];
-
-    db.queue = [];
-
-    db.matchCounter++;
-
-    const matchId =
-        db.matchCounter;
-
-    const shuffled =
-        [...players].sort(
-            () => Math.random() - 0.5
-        );
-
-    const teamA =
-        shuffled.slice(
-            0,
-            config.queue.playersPerTeam
-        );
-
-    const teamB =
-        shuffled.slice(
-            config.queue.playersPerTeam,
+        if (
+            db.queue.length <
             config.queue.maxPlayers
-        );
+        ) {
+            return;
+        }
 
-    const match = {
-        id: matchId,
-        players: players,
-        teamA: teamA,
-        teamB: teamB,
-        status: "waiting",
-        winner: null,
-        createdAt:
-            new Date().toISOString()
-    };
+        const players =
+            [...db.queue];
 
-    db.matches.push(match);
+        db.queue = [];
 
-    players.forEach(id => {
+        db.matchCounter++;
 
-        const player =
-            getPlayer(id);
+        const matchId =
+            db.matchCounter;
 
-        player.matches++;
-    });
+        const shuffled =
+            [...players].sort(
+                () =>
+                    Math.random() - 0.5
+            );
 
-    saveDatabase();
+        const teamA =
+            shuffled.slice(
+                0,
+                config.queue.playersPerTeam
+            );
 
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `🔥 PARTIDA #${matchId}`
-            )
-            .setDescription(
-                "A fila está completa! Uma nova partida foi criada."
-            )
-            .addFields(
-                {
-                    name: "🔵 TIME A",
-                    value:
-                        createPlayerList(teamA)
-                },
-                {
-                    name: "🔴 TIME B",
-                    value:
-                        createPlayerList(teamB)
-                },
-                {
-                    name: "📊 Status",
-                    value:
-                        "Aguardando resultado"
-                }
-            )
-            .setFooter({
-                text:
-                    "Boa partida!"
-            });
+        const teamB =
+            shuffled.slice(
+                config.queue.playersPerTeam,
+                config.queue.maxPlayers
+            );
 
-    await channel.send({
-        content:
-            players
-                .map(
-                    id => `<@${id}>`
+        const match = {
+            id: matchId,
+            players,
+            teamA,
+            teamB,
+            status: "waiting",
+            winner: null,
+            createdAt:
+                new Date().toISOString()
+        };
+
+        db.matches.push(match);
+
+        players.forEach(id => {
+
+            const player =
+                getPlayer(id);
+
+            player.matches++;
+        });
+
+        saveDatabase();
+
+        const embed =
+            new EmbedBuilder()
+                .setTitle(
+                    `🔥 PARTIDA #${matchId}`
                 )
-                .join(" "),
-        embeds: [embed]
-    });
+                .setDescription(
+                    "A fila está completa! Uma nova partida foi criada."
+                )
+                .addFields(
+                    {
+                        name: "🔵 TIME A",
+                        value:
+                            createPlayerList(
+                                teamA
+                            )
+                    },
+                    {
+                        name: "🔴 TIME B",
+                        value:
+                            createPlayerList(
+                                teamB
+                            )
+                    },
+                    {
+                        name: "📊 Status",
+                        value:
+                            "Aguardando resultado"
+                    }
+                )
+                .setFooter({
+                    text:
+                        "Boa partida!"
+                });
 
-    if (
-        config.channels &&
-        config.channels.logs
-    ) {
+        await channel.send({
+            content:
+                players
+                    .map(
+                        id => `<@${id}>`
+                    )
+                    .join(" "),
+            embeds: [
+                embed
+            ]
+        });
+
+        // LOGS
 
         const logsChannel =
-            guild.channels.cache.get(
-                config.channels.logs
-            );
+            guild &&
+            config.channels &&
+            config.channels.logs
+                ? guild.channels.cache.get(
+                    config.channels.logs
+                )
+                : null;
 
         if (logsChannel) {
 
@@ -339,14 +453,16 @@ async function createMatch(guild, channel) {
                         )
                         .addFields(
                             {
-                                name: "Time A",
+                                name:
+                                    "🔵 Time A",
                                 value:
                                     createPlayerList(
                                         teamA
                                     )
                             },
                             {
-                                name: "Time B",
+                                name:
+                                    "🔴 Time B",
                                 value:
                                     createPlayerList(
                                         teamB
@@ -354,13 +470,28 @@ async function createMatch(guild, channel) {
                             }
                         )
                 ]
+            }).catch(error => {
+
+                console.error(
+                    "⚠️ Erro ao enviar log:",
+                    error.message
+                );
+
             });
         }
+
+        await updateQueuePanel(
+            channel
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ Erro ao criar partida:",
+            error
+        );
     }
-
-    await updateQueuePanel(channel);
 }
-
 
 // ======================================================
 // COMANDOS
@@ -445,7 +576,6 @@ const commands = [
         )
 ];
 
-
 // ======================================================
 // REGISTRAR COMANDOS
 // ======================================================
@@ -457,13 +587,12 @@ const rest =
         config.token
     );
 
-
 async function registerCommands() {
 
     try {
 
         console.log(
-            "Registrando comandos..."
+            "🔄 Registrando comandos..."
         );
 
         await rest.put(
@@ -481,18 +610,17 @@ async function registerCommands() {
         );
 
         console.log(
-            "Comandos registrados!"
+            "✅ Comandos registrados!"
         );
 
     } catch (error) {
 
         console.error(
-            "ERRO AO REGISTRAR COMANDOS:",
+            "❌ Erro ao registrar comandos:",
             error
         );
     }
 }
-
 
 // ======================================================
 // INTERAÇÕES
@@ -508,13 +636,16 @@ client.on(
             // BOTÕES
             // ==================================================
 
-            if (interaction.isButton()) {
+            if (
+                interaction.isButton()
+            ) {
 
                 const userId =
                     interaction.user.id;
 
-
-                // ENTRAR NA FILA
+                // ------------------------------------------
+                // ENTRAR
+                // ------------------------------------------
 
                 if (
                     interaction.customId ===
@@ -552,16 +683,19 @@ client.on(
 
                     saveDatabase();
 
+                    const position =
+                        db.queue.indexOf(
+                            userId
+                        ) + 1;
+
+                    // Responder imediatamente
                     await interaction.reply({
                         content:
-                            `✅ Você entrou na fila!\n📍 Posição: ${
-                                db.queue.indexOf(
-                                    userId
-                                ) + 1
-                            }`,
+                            `✅ Você entrou na fila!\n📍 Posição: ${position}`,
                         flags: 64
                     });
 
+                    // Atualizações não devem derrubar a interação
                     await updateQueuePanel(
                         interaction.channel
                     );
@@ -580,8 +714,9 @@ client.on(
                     return;
                 }
 
-
-                // SAIR DA FILA
+                // ------------------------------------------
+                // SAIR
+                // ------------------------------------------
 
                 if (
                     interaction.customId ===
@@ -593,7 +728,9 @@ client.on(
                             userId
                         );
 
-                    if (index === -1) {
+                    if (
+                        index === -1
+                    ) {
 
                         return interaction.reply({
                             content:
@@ -622,8 +759,9 @@ client.on(
                     return;
                 }
 
-
+                // ------------------------------------------
                 // VER FILA
+                // ------------------------------------------
 
                 if (
                     interaction.customId ===
@@ -641,7 +779,6 @@ client.on(
                 return;
             }
 
-
             // ==================================================
             // SLASH COMMANDS
             // ==================================================
@@ -651,7 +788,6 @@ client.on(
             ) {
                 return;
             }
-
 
             // ==================================================
             // PAINEL
@@ -675,6 +811,7 @@ client.on(
                     });
                 }
 
+                // Responde imediatamente à interação
                 await interaction.deferReply({
                     flags: 64
                 });
@@ -690,384 +827,3 @@ client.on(
 
                 return interaction.editReply({
                     content:
-                        "✅ Painel criado."
-                });
-            }
-
-
-            // ==================================================
-            // FILA
-            // ==================================================
-
-            if (
-                interaction.commandName ===
-                "fila"
-            ) {
-
-                return interaction.reply({
-                    embeds: [
-                        createQueueEmbed()
-                    ]
-                });
-            }
-
-
-            // ==================================================
-            // LIMPAR FILA
-            // ==================================================
-
-            if (
-                interaction.commandName ===
-                "limparfila"
-            ) {
-
-                if (
-                    !isStaff(
-                        interaction.member
-                    )
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Apenas a Staff pode usar este comando.",
-                        flags: 64
-                    });
-                }
-
-                await interaction.deferReply({
-                    flags: 64
-                });
-
-                db.queue = [];
-
-                saveDatabase();
-
-                await updateQueuePanel(
-                    interaction.channel
-                );
-
-                return interaction.editReply({
-                    content:
-                        "🧹 Fila limpa com sucesso."
-                });
-            }
-
-
-            // ==================================================
-            // RESULTADO
-            // ==================================================
-
-            if (
-                interaction.commandName ===
-                "resultado"
-            ) {
-
-                if (
-                    !isStaff(
-                        interaction.member
-                    )
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Apenas a Staff pode registrar resultados.",
-                        flags: 64
-                    });
-                }
-
-                const matchId =
-                    interaction.options.getInteger(
-                        "partida"
-                    );
-
-                const winner =
-                    interaction.options.getString(
-                        "vencedor"
-                    );
-
-                const match =
-                    db.matches.find(
-                        m =>
-                            m.id ===
-                            matchId
-                    );
-
-                if (!match) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Partida não encontrada.",
-                        flags: 64
-                    });
-                }
-
-                if (
-                    match.status ===
-                    "finished"
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Esta partida já possui resultado.",
-                        flags: 64
-                    });
-                }
-
-                const winners =
-                    winner === "A"
-                        ? match.teamA
-                        : match.teamB;
-
-                const losers =
-                    winner === "A"
-                        ? match.teamB
-                        : match.teamA;
-
-                winners.forEach(
-                    id => {
-
-                        const player =
-                            getPlayer(id);
-
-                        player.wins++;
-                        player.points += 3;
-                    }
-                );
-
-                losers.forEach(
-                    id => {
-
-                        const player =
-                            getPlayer(id);
-
-                        player.losses++;
-                    }
-                );
-
-                match.status =
-                    "finished";
-
-                match.winner =
-                    winner;
-
-                match.finishedAt =
-                    new Date().toISOString();
-
-                saveDatabase();
-
-                const embed =
-                    new EmbedBuilder()
-                        .setTitle(
-                            `🏆 RESULTADO — PARTIDA #${matchId}`
-                        )
-                        .addFields(
-                            {
-                                name:
-                                    "🥇 Vencedor",
-                                value:
-                                    winner === "A"
-                                        ? "🔵 Time A"
-                                        : "🔴 Time B"
-                            },
-                            {
-                                name:
-                                    "Time A",
-                                value:
-                                    createPlayerList(
-                                        match.teamA
-                                    )
-                            },
-                            {
-                                name:
-                                    "Time B",
-                                value:
-                                    createPlayerList(
-                                        match.teamB
-                                    )
-                            }
-                        );
-
-                if (
-                    config.channels &&
-                    config.channels.results
-                ) {
-
-                    const resultsChannel =
-                        interaction.guild.channels.cache.get(
-                            config.channels.results
-                        );
-
-                    if (resultsChannel) {
-
-                        await resultsChannel.send({
-                            embeds: [
-                                embed
-                            ]
-                        });
-                    }
-                }
-
-                return interaction.reply({
-                    content:
-                        `✅ Resultado da partida #${matchId} registrado.`,
-                    flags: 64
-                });
-            }
-
-// ==================================================
-// RANKING
-// ==================================================
-
-if (interaction.commandName === "ranking") {
-
-    const ranking = Object.values(db.players)
-        .sort((a, b) => b.points - a.points);
-
-    if (ranking.length === 0) {
-
-        return interaction.reply({
-            content:
-                "📊 Ainda não existem jogadores no ranking.",
-            flags: 64
-        });
-    }
-
-    const rankingText = ranking
-        .slice(0, 10)
-        .map(
-            (player, index) =>
-                `${index + 1}. <@${player.id}> — ${player.points} pontos | ${player.wins} vitórias`
-        )
-        .join("\n");
-
-    const embed = new EmbedBuilder()
-        .setTitle("🏆 RANKING")
-        .setDescription(rankingText)
-        .setFooter({
-            text: "ORG Free Fire • Ranking"
-        });
-
-    return interaction.reply({
-        embeds: [embed]
-    });
-}
-
-
-// ==================================================
-// PERFIL
-// ==================================================
-
-if (interaction.commandName === "perfil") {
-
-    const user =
-        interaction.options.getUser("jogador") ||
-        interaction.user;
-
-    const player = getPlayer(user.id);
-
-    const embed = new EmbedBuilder()
-        .setTitle(`👤 PERFIL — ${user.username}`)
-        .setThumbnail(user.displayAvatarURL())
-        .addFields(
-            {
-                name: "🏆 Vitórias",
-                value: `${player.wins}`,
-                inline: true
-            },
-            {
-                name: "❌ Derrotas",
-                value: `${player.losses}`,
-                inline: true
-            },
-            {
-                name: "⭐ Pontos",
-                value: `${player.points}`,
-                inline: true
-            },
-            {
-                name: "🎮 Partidas",
-                value: `${player.matches}`,
-                inline: true
-            }
-        );
-
-    return interaction.reply({
-        embeds: [embed]
-    });
-}
-
-
-// ==================================================
-// ERROS
-// ==================================================
-
-        } catch (error) {
-
-            console.error(
-                "ERRO NO COMANDO:",
-                error
-            );
-
-            if (
-                interaction.deferred ||
-                interaction.replied
-            ) {
-
-                await interaction.editReply({
-                    content:
-                        "❌ Ocorreu um erro ao executar o comando."
-                }).catch(() => {});
-
-            } else {
-
-                await interaction.reply({
-                    content:
-                        "❌ Ocorreu um erro ao executar o comando.",
-                    flags: 64
-                }).catch(() => {});
-            }
-        }
-    }
-);
-
-
-// ======================================================
-// BOT ONLINE
-// ======================================================
-
-client.once("ready", async () => {
-
-    console.log(
-        `🤖 Bot online como ${client.user.tag}`
-    );
-
-    await registerCommands();
-});
-
-
-// ======================================================
-// SERVIDOR HTTP PARA O RENDER
-// ======================================================
-
-
-const PORT = process.env.PORT || 3000;
-
-http.createServer((req, res) => {
-
-    res.writeHead(200);
-    res.end("Bot online!");
-
-}).listen(PORT, "0.0.0.0", () => {
-
-    console.log(
-        `🌐 Servidor HTTP rodando na porta ${PORT}`
-    );
-});
-
-
-// ======================================================
-// LOGIN
-// ======================================================
-
-client.login(config.token);
-                                            
