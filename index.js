@@ -1594,7 +1594,20 @@ process.on(
         );
     }
 );
+// ======================================================
+// SERVIDOR HTTP PARA O RENDER
+// ======================================================
 
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end("Bot online");
+}).listen(PORT, () => {
+    console.log(
+        `🌐 Servidor HTTP ativo na porta ${PORT}`
+    );
+});
 // ======================================================
 // LOGIN
 // ======================================================
